@@ -193,7 +193,8 @@ if (process.env.NODE_ENV === "production") {
         app.use(express.static(publicPath));
         
         // SPA catch-all: serve index.html for non-API routes
-        app.get("*", (req, res, next) => {
+        // Express 5 requires named wildcard params: /{*splat} instead of *
+        app.get("/{*splat}", (req, res, next) => {
             if (req.url.startsWith("/api/") || req.url.startsWith("/socket.io/")) {
                 return next();
             }
