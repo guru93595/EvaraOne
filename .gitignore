@@ -1,0 +1,68 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build
+dist/
+dist-ssr/
+build/
+.cache/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+.env.local
+.env.production
+
+# Firebase Secrets
+serviceAccount.json
+firebase-service-account.json
+firebase-secure.js
+backend/serviceAccount.json
+
+# Databases & Caches
+.telemetry_cache/
+*.db
+*.sqlite
+*.sql
+
+# Legacy / Diagnostic Scripts
+backend/check-*.js
+backend/check_*.js
+backend/diagnostic.js
+backend/list-*.js
+backend/migrate-*.js
+backend/seed-*.js
+backend/setup-*.js
+backend/test-*.js
+backend/verify-*.js
+backend/fix-*.js
+backend/init-*.js
+backend/full-pipeline-diagnostic.js
+backend/simulate-api.js
+backend/cleanup-standardize.js
+backend/clean-*.js
+backend/*.log
+tmp-remove-logs.js
+
+# IDE / Editor
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.sln
+*.sw?
+
+# Logs
+logs/
+*.log
+debug.log
+
+# OS
+Thumbs.db

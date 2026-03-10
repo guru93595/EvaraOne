@@ -1,0 +1,66 @@
+services:
+  # 1. Backend API Service
+  - type: web
+    name: evara-tech-api
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: evara-secrets
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: evara-cache
+          property: connectionString
+
+  # 2. Telemetry Worker (Standalone Background Task)
+  - type: worker
+    name: evara-telemetry-worker
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node src/workers/telemetryWorker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: evara-secrets
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: evara-cache
+          property: connectionString
+
+  # 3. Frontend Static Site
+  - type: static
+    name: evara-tech-frontend
+    env: static
+    region: ohio
+    plan: free
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: client/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://evara-tech-api.onrender.com/api/v1
+      - key: VITE_WS_URL
+        value: https://evara-tech-api.onrender.com
+
+  # 4. Redis Instance
+  - type: redis
+    name: evara-cache
+    region: ohio
+    plan: free
+    ipAllowList: [] # Only allow internal access
+
+envGroups:
+  - name: evara-secrets
+    envVars:
+      - key: FIREBASE_PROJECT_ID
+      - key: FIREBASE_PRIVATE_KEY
+      - key: FIREBASE_CLIENT_EMAIL
+      - key: ALLOWED_ORIGINS
+        value: https://evara-tech-frontend.onrender.com

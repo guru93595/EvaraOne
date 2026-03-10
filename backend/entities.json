@@ -1,0 +1,65 @@
+{
+  "customers": [
+    {
+      "id": "2ynjm0CZ6GVukjjnvN9Yuxb6QKn2",
+      "name": "Unknown",
+      "role": "superadmin"
+    },
+    {
+      "id": "4MjvnRrkwMZPcMghDKTgctA2CM83",
+      "name": "Unknown",
+      "role": "customer"
+    },
+    {
+      "id": "5vAwCRibuEV3r0sZze8PEtV2qzQ2",
+      "name": "Unknown",
+      "role": "superadmin"
+    },
+    {
+      "id": "BkyyF3L6RQkOGsNyDhp9",
+      "name": "Unknown",
+      "role": "customer"
+    },
+    {
+      "id": "LPMT3em0hoY4fLwQxzuT2ieTnEF2",
+      "name": "Unknown",
+      "role": "superadmin"
+    },
+    {
+      "id": "lTy0FwjuUdhZbXcjUsxwimeMHQ42",
+      "name": "Unknown",
+      "role": "superadmin"
+    }
+  ],
+  "communities": [
+    {
+      "id": "SyYNmxziCqM7rEiq09Vs",
+      "name": "Kalki Community"
+    },
+    {
+      "id": "X5zSs5oCR8iUnpMNHmtW",
+      "name": "IIT Hyderabad"
+    },
+    {
+      "id": "zVN5f3JJYC4fvjcv6wRW",
+      "name": "IIIT Hyderabad"
+    }
+  ],
+  "zones": [
+    {
+      "id": "DDwG9qlpSlrp6qnOTibn",
+      "name": "Unknown",
+      "community_id": "None"
+    },
+    {
+      "id": "NmtY6CdQuaAMS5RCx7nj",
+      "name": "Unknown",
+      "community_id": "None"
+    },
+    {
+      "id": "nBcZHJR0VKVPWHE0XqXc",
+      "name": "Unknown",
+      "community_id": "None"
+    }
+  ]
+}
