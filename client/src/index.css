@@ -597,10 +597,10 @@ body {
   color: white !important;
 }
 
-/* Global cursor and text selection fix */
+/* Standard cursor and text selection behavior restored */
 * {
-  cursor: default !important;
-  user-select: none;
+  cursor: auto;
+  user-select: text;
 }
 
 /* Re-enable text selection and cursor for actual inputs and text areas */

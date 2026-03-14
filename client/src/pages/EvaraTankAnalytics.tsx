@@ -620,43 +620,6 @@ const EvaraTankAnalytics = () => {
                                 </div>
                             </div>
 
-                            {/* Estimation Cards row - Positioned below Tank visualizer to align with Timeline neighbor */}
-                            <div className="grid grid-cols-2 gap-4 w-full">
-                                <div className="apple-glass-card p-4 rounded-3xl flex flex-col justify-between" style={{ background: 'rgba(255, 149, 0, 0.1)', border: '1px solid rgba(255, 149, 0, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(255, 149, 0, 0.05)' }}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="p-1.5 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.15)' }}>
-                                            <Timer size={18} color="#FF9500" />
-                                        </div>
-                                        <Info size={14} color="#8E8E93" className="cursor-help opacity-60 hover:opacity-100" />
-                                    </div>
-                                    <div className="flex flex-col mt-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>Est. Time Until Empty</span>
-                                        <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: '#1C1C1E' }}>
-                                            {waterAnalytics.estimatedEmptyTimeMinutes ?
-                                                `${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes % 60)}m`
-                                                : '--'}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="apple-glass-card p-4 rounded-3xl flex flex-col justify-between" style={{ background: 'rgba(10, 132, 255, 0.1)', border: '1px solid rgba(10, 132, 255, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(10, 132, 255, 0.05)' }}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="p-1.5 rounded-lg" style={{ background: 'rgba(10, 132, 255, 0.15)' }}>
-                                            <Droplets size={18} color="#0A84FF" />
-                                        </div>
-                                        <Info size={14} color="#8E8E93" className="cursor-help opacity-60 hover:opacity-100" />
-                                    </div>
-                                    <div className="flex flex-col mt-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>Est. Time Until Full</span>
-                                        <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: '#1C1C1E' }}>
-                                            {waterAnalytics.estimatedFullTimeMinutes ?
-                                                (waterAnalytics.estimatedFullTimeMinutes > 60 ?
-                                                    `${Math.floor(waterAnalytics.estimatedFullTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedFullTimeMinutes % 60)}m`
-                                                    : `${Math.floor(waterAnalytics.estimatedFullTimeMinutes)} min`)
-                                                : '--'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
                         {/* COLUMN 2 - GRAPHS & INSIGHTS */}
@@ -792,9 +755,52 @@ const EvaraTankAnalytics = () => {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
 
-                            {/* TODAY'S EVENT TIMELINE - Relocated below graphs */}
-                            <div className="apple-glass-card p-5 rounded-[2rem] mt-1" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)' }}>
+                    {/* SECONDARY ROW - ESTIMATIONS & TIMELINE */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full mt-4">
+                        {/* Estimation Cards */}
+                        <div className="grid grid-cols-2 gap-4 w-full">
+                            <div className="apple-glass-card p-4 rounded-3xl flex flex-col justify-between" style={{ background: 'rgba(255, 149, 0, 0.1)', border: '1px solid rgba(255, 149, 0, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(255, 149, 0, 0.05)' }}>
+                                <div className="flex justify-between items-start">
+                                    <div className="p-1.5 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.15)' }}>
+                                        <Timer size={18} color="#FF9500" />
+                                    </div>
+                                    <Info size={14} color="#8E8E93" className="cursor-help opacity-60 hover:opacity-100" />
+                                </div>
+                                <div className="flex flex-col mt-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>Est. Time Until Empty</span>
+                                    <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: '#1C1C1E' }}>
+                                        {waterAnalytics.estimatedEmptyTimeMinutes ?
+                                            `${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes % 60)}m`
+                                            : '--'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="apple-glass-card p-4 rounded-3xl flex flex-col justify-between" style={{ background: 'rgba(10, 132, 255, 0.1)', border: '1px solid rgba(10, 132, 255, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(10, 132, 255, 0.05)' }}>
+                                <div className="flex justify-between items-start">
+                                    <div className="p-1.5 rounded-lg" style={{ background: 'rgba(10, 132, 255, 0.15)' }}>
+                                        <Droplets size={18} color="#0A84FF" />
+                                    </div>
+                                    <Info size={14} color="#8E8E93" className="cursor-help opacity-60 hover:opacity-100" />
+                                </div>
+                                <div className="flex flex-col mt-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>Est. Time Until Full</span>
+                                    <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: '#1C1C1E' }}>
+                                        {waterAnalytics.estimatedFullTimeMinutes ?
+                                            (waterAnalytics.estimatedFullTimeMinutes > 60 ?
+                                                `${Math.floor(waterAnalytics.estimatedFullTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedFullTimeMinutes % 60)}m`
+                                                : `${Math.floor(waterAnalytics.estimatedFullTimeMinutes)} min`)
+                                            : '--'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* TODAY'S EVENT TIMELINE */}
+                        <div className="lg:col-span-2">
+                            <div className="apple-glass-card p-5 rounded-[2rem]" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)' }}>
                                 <div className="flex justify-between items-center mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(10,132,255,0.1)' }}>
@@ -808,11 +814,8 @@ const EvaraTankAnalytics = () => {
                                     </div>
                                 </div>
 
-                                <div className="relative h-24 flex items-center px-4">
-                                    {/* Timeline Base Line */}
-                                    <div className="absolute left-6 right-6 h-0.5 bg-slate-100 rounded-full" />
-                                    
-                                    {/* Event Samples */}
+                                <div className="relative h-20 flex items-center px-4">
+                                    <div className="absolute left-6 right-6 h-0.5 bg-slate-100 rounded-full top-1/2 -translate-y-1/2" />
                                     <div className="relative flex justify-between w-full">
                                         {[
                                             { time: '08:15', label: 'Refill', icon: TrendingUp, color: '#34C759', pos: '15%' },
