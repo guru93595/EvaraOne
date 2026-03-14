@@ -1,4 +1,5 @@
 const { db } = require("../config/firebase.js");
+const { Filter } = require("firebase-admin/firestore");
 const cache = require("../config/cache.js");
 const telemetryCache = require("../services/cacheService.js");
 
@@ -30,6 +31,7 @@ exports.createZone = async (req, res) => {
 
         const docRef = await db.collection("zones").add(zoneData);
         await cache.flushPrefix("zones_list_");
+        await cache.flushPrefix("admin_hierarchy");
         await cache.flushPrefix("dashboard_summary_");
 
         return res.status(201).json({
@@ -111,6 +113,7 @@ exports.createCustomer = async (req, res) => {
         const customer = { ...req.body, created_at: new Date() };
         const doc = await db.collection("customers").add(customer);
         await cache.flushPrefix("customers_");
+        await cache.flushPrefix("admin_hierarchy");
         await cache.flushPrefix("dashboard_summary_");
         res.status(201).json({ success: true, id: doc.id });
     } catch (error) {
@@ -129,7 +132,7 @@ exports.getCustomers = async (req, res) => {
         let query = db.collection("customers");
         
         if (req.user.role !== "superadmin") {
-            query = query.where("id", "==", req.user.uid);
+            query = query.where("id", "==", req.user.customer_id || req.user.uid);
         } else if (req.query.community_id) {
             query = query.where("community_id", "==", req.query.community_id);
         } else {
@@ -191,6 +194,7 @@ exports.createCommunity = async (req, res) => {
         const community = { ...req.body, created_at: new Date() };
         const doc = await db.collection("communities").add(community);
         await cache.flushPrefix("communities_");
+        await cache.flushPrefix("admin_hierarchy");
         await cache.flushPrefix("dashboard_summary_");
         res.status(201).json({ success: true, id: doc.id, message: "Community created successfully" });
     } catch (error) {
@@ -300,11 +304,13 @@ exports.createNode = async (req, res) => {
         const idForDevice = hardwareId || `DEV-${Date.now()}`;
         const typeNormalized = (assetType || "evaratank").toLowerCase();
         
-        // 1. Registry entry (Minimal)
+        // 1. Registry entry (Minimal + Ownership for efficient filtering)
         const registryData = {
             device_id: idForDevice,
             device_type: typeNormalized,
-            node_id: idForDevice
+            node_id: idForDevice,
+            customer_id: customerId || "",
+            community_id: communityId || ""
         };
 
         const deviceRef = await db.collection("devices").add(registryData);
@@ -363,8 +369,13 @@ exports.createNode = async (req, res) => {
             await db.collection(targetCol).doc(deviceDocId).set(metadata);
         }
 
-        await cache.flushPrefix("nodes_");
-        await cache.flushPrefix("dashboard_summary_");
+        // SaaS Invalidation: Flush all user-specific and aggregate dashboard caches
+        await Promise.all([
+            cache.flushPrefix("nodes_"),
+            cache.flushPrefix("user:"),
+            cache.flushPrefix("dashboard_init_"),
+            cache.flushPrefix("dashboard_summary_")
+        ]);
 
         res.status(201).json({ 
             success: true, 
@@ -382,13 +393,28 @@ exports.getNodes = async (req, res) => {
         console.log(`[AdminController] getNodes for user:`, req.user.uid, "role:", req.user.role);
         const nodesCacheKey = req.user.role === "superadmin" 
             ? "user:admin:devices" 
-            : `user:${req.user.uid}:devices`;
+            : `user:${req.user.customer_id || req.user.uid}:devices`;
         console.log(`[AdminController] Cache Key:`, nodesCacheKey);
         const cachedNodes = await cache.get(nodesCacheKey);
         if (cachedNodes) return res.status(200).json(cachedNodes);
 
         const limitStr = parseInt(req.query.limit) || 100;
-        const snapshot = await db.collection("devices").limit(limitStr).get();
+        let query = db.collection("devices");
+        
+        if (req.user.role !== "superadmin") {
+            if (req.user.community_id && req.user.customer_id) {
+                query = query.where(
+                    Filter.or(
+                        Filter.where("customer_id", "==", req.user.customer_id),
+                        Filter.where("community_id", "==", req.user.community_id)
+                    )
+                );
+            } else {
+                query = query.where("customer_id", "==", req.user.customer_id || req.user.uid);
+            }
+        }
+        
+        const snapshot = await query.limit(limitStr).get();
         
         // Batched Metadata Fetching (Eliminates N+1 reads)
         const typedGroups = {};
@@ -408,7 +434,7 @@ exports.getNodes = async (req, res) => {
         const typeBatches = await Promise.all(
             Object.keys(typedGroups).map(async (type) => {
                 const ids = typedGroups[type];
-                const refs = ids.map(id => db.collection(type).doc(id));
+                const refs = ids.map(id => db.collection(type.toLowerCase()).doc(id));
                 const metas = await db.getAll(...refs);
                 return metas.map(m => m.exists ? { id: m.id, meta: m.data(), type } : null).filter(Boolean);
             })
@@ -417,8 +443,9 @@ exports.getNodes = async (req, res) => {
         for (const batch of typeBatches) {
             for (const item of batch) {
                 const { id, meta } = item;
-                // Filter by customer if not superadmin
-                if (req.user.role !== "superadmin" && meta.customer_id !== req.user.uid) continue;
+                // Filter by customer if not superadmin (Allow direct ownership OR community-based access)
+                const isOwner = meta.customer_id === req.user.uid || (req.user.community_id && meta.community_id === req.user.community_id);
+                if (req.user.role !== "superadmin" && !isOwner) continue;
 
                 const { thingspeak_read_api_key, ...safeMeta } = meta;
                 devices.push({ 
@@ -458,7 +485,8 @@ exports.updateNode = async (req, res) => {
         const deviceDoc = await resolveDevice(req.params.id);
         if (!deviceDoc || !deviceDoc.exists) return res.status(404).json({ error: "Device not found" });
         
-        const type = deviceDoc.data().device_type;
+        const type = (deviceDoc.data().device_type || "").toLowerCase();
+        if (!type) return res.status(400).json({ error: "Device type not specified" });
         const metaRef = db.collection(type).doc(deviceDoc.id);
 
         // Sanitize and support both naming conventions
@@ -478,13 +506,25 @@ exports.updateNode = async (req, res) => {
         const channelId = body.thingspeakChannelId || body.thingspeak_channel_id;
         if (channelId) metaUpdate.thingspeak_channel_id = trimmed(channelId);
         
-        if (body.customerId || body.customer_id) metaUpdate.customer_id = trimmed(body.customerId || body.customer_id);
+        if (body.customerId || body.customer_id) {
+            const cid = trimmed(body.customerId || body.customer_id);
+            metaUpdate.customer_id = cid;
+            // Also sync to registry
+            await db.collection("devices").doc(deviceDoc.id).update({ customer_id: cid });
+        }
+
+        if (body.communityId || body.community_id) {
+            const commId = trimmed(body.communityId || body.community_id);
+            metaUpdate.community_id = commId;
+            // Also sync to registry
+            await db.collection("devices").doc(deviceDoc.id).update({ community_id: commId });
+        }
         
         if (body.latitude !== undefined) metaUpdate.latitude = parseFloat(body.latitude);
         if (body.longitude !== undefined) metaUpdate.longitude = parseFloat(body.longitude);
 
         // Type-specific updates (flexible naming)
-        if (type === "evaratank") {
+        if (type === "evaratank" || type === "tank") {
             const cap = body.capacity || body.tank_size || body.capacity_liters || body.capacity_liters_override;
             if (cap !== undefined) metaUpdate.tank_size = parseFloat(cap) || 0;
             
@@ -551,7 +591,13 @@ exports.updateNode = async (req, res) => {
 
         await metaRef.set(metaUpdate, { merge: true });
         
-        await cache.flushPrefix("nodes_");
+        // SaaS Invalidation
+        await Promise.all([
+            cache.flushPrefix("nodes_"),
+            cache.flushPrefix("user:"),
+            cache.flushPrefix("dashboard_init_"),
+            cache.flushPrefix("dashboard_summary_")
+        ]);
         if (typeof telemetryCache !== 'undefined') {
              telemetryCache.del(`telemetry_${deviceDoc.id}`); 
              telemetryCache.del(`status_${deviceDoc.id}`);
@@ -568,15 +614,22 @@ exports.deleteNode = async (req, res) => {
         const deviceDoc = await db.collection("devices").doc(req.params.id).get();
         if (!deviceDoc.exists) return res.status(404).json({ error: "Device not found" });
         
-        const type = deviceDoc.data().device_type;
+        const type = (deviceDoc.data().device_type || "").toLowerCase();
         const batch = db.batch();
         batch.delete(db.collection("devices").doc(req.params.id));
-        batch.delete(db.collection(type).doc(req.params.id));
+        if (type) {
+            batch.delete(db.collection(type).doc(req.params.id));
+        }
 
         await batch.commit();
 
-        await cache.flushPrefix("nodes_");
-        await cache.flushPrefix("dashboard_summary_");
+        // SaaS Invalidation
+        await Promise.all([
+            cache.flushPrefix("nodes_"),
+            cache.flushPrefix("user:"),
+            cache.flushPrefix("dashboard_init_"),
+            cache.flushPrefix("dashboard_summary_")
+        ]);
         if (typeof telemetryCache !== 'undefined') {
              telemetryCache.del(`telemetry_${req.params.id}`); 
              telemetryCache.del(`status_${req.params.id}`);
@@ -594,7 +647,7 @@ exports.getDashboardSummary = async (req, res) => {
             return res.status(401).json({ error: "Unauthorized: Missing user information" });
         }
         const isSuperAdmin = req.user.role === "superadmin";
-        const cacheKey = `user:${isSuperAdmin ? 'admin' : req.user.uid}:summary`;
+        const cacheKey = `user:${isSuperAdmin ? 'admin' : req.user.customer_id || req.user.uid}:summary`;
         const cached = await cache.get(cacheKey);
         if (cached) return res.status(200).json(cached);
         
@@ -602,10 +655,20 @@ exports.getDashboardSummary = async (req, res) => {
         let customersQuery = db.collection("customers");
         let communitiesQuery = db.collection("communities");
         let zonesQuery = db.collection("zones");
-
+ 
         if (!isSuperAdmin) {
-            nodesQuery = nodesQuery.where("customer_id", "==", req.user.uid);
-            customersQuery = customersQuery.where("email", "==", req.user.email); 
+            if (req.user.community_id && req.user.customer_id) {
+                nodesQuery = nodesQuery.where(
+                    Filter.or(
+                        Filter.where("customer_id", "==", req.user.customer_id),
+                        Filter.where("community_id", "==", req.user.community_id)
+                    )
+                );
+            } else {
+                nodesQuery = nodesQuery.where("customer_id", "==", req.user.customer_id || req.user.uid);
+            }
+            // Search customers by id (uid) instead of email for precision
+            customersQuery = customersQuery.where("id", "==", req.user.customer_id || req.user.uid); 
         }
 
         const [nodesSnap, customersSnap, communitiesSnap, zonesSnap] = await Promise.all([
@@ -638,8 +701,42 @@ exports.getDashboardSummary = async (req, res) => {
 
 exports.getHierarchy = async (req, res) => {
     try {
-        res.status(200).json([]);
+        const cacheKey = "admin_hierarchy";
+        const cached = await cache.get(cacheKey);
+        if (cached) return res.status(200).json(cached);
+
+        const [zonesSnap, communitiesSnap, customersSnap] = await Promise.all([
+            db.collection("zones").get(),
+            db.collection("communities").get(),
+            db.collection("customers").get()
+        ]);
+
+        const zones = zonesSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), communities: [] }));
+        const communities = communitiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), customers: [] }));
+        const customers = customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Map customers to communities
+        const communityMap = {};
+        communities.forEach(c => communityMap[c.id] = c);
+        customers.forEach(cust => {
+            if (cust.community_id && communityMap[cust.community_id]) {
+                communityMap[cust.community_id].customers.push(cust);
+            }
+        });
+
+        // Map communities to zones
+        const zoneMap = {};
+        zones.forEach(z => zoneMap[z.id] = z);
+        communities.forEach(c => {
+            if (c.zone_id && zoneMap[c.zone_id]) {
+                zoneMap[c.zone_id].communities.push(c);
+            }
+        });
+
+        await cache.set(cacheKey, zones, 600); // 10 min
+        res.status(200).json(zones);
     } catch (error) {
+        console.error("Hierarchy fetch error:", error);
         res.status(500).json({ error: "Failed to get hierarchy" });
     }
 };
@@ -660,7 +757,7 @@ exports.getAuditLogs = async (req, res) => {
 exports.getDashboardInit = async (req, res) => {
     try {
         const isSuperAdmin = req.user.role === "superadmin";
-        const cacheKey = `dashboard_init_${isSuperAdmin ? 'admin' : req.user.uid}`;
+        const cacheKey = `dashboard_init_${isSuperAdmin ? 'admin' : req.user.customer_id || req.user.uid}`;
         const cached = await cache.get(cacheKey);
         if (cached) return res.status(200).json(cached);
 

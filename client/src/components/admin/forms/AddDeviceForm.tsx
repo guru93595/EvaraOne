@@ -38,6 +38,7 @@ import { adminService } from "../../../services/admin";
 import { useZones } from "../../../hooks/useZones";
 import { useCommunities } from "../../../hooks/useCommunities";
 import { useToast } from "../../ToastProvider";
+import { useAuth } from "../../../context/AuthContext";
 import { deviceSchema, type DeviceInput } from "../../../schemas";
 import { FormField } from "../../forms/FormField";
 
@@ -93,6 +94,7 @@ const STEPS = [
 
 export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const isEdit = !!initialData;
   const [step, setStep] = useState(1);
@@ -864,21 +866,23 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
             Continue <ChevronRight size={15} />
           </motion.button>
         ) : (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            type="submit"
-            form="device-form"
-            disabled={isSubmitting}
-            className="flex items-center gap-2 px-8 py-2.5 bg-emerald-600 text-white text-sm font-[800] rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all"
-          >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin" size={16} />
-            ) : (
-              <Zap size={16} />
-            )}
-            {isSubmitting ? "Provisioning..." : "Commission Node"}
-          </motion.button>
+          user?.role === "superadmin" && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              type="submit"
+              form="device-form"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-8 py-2.5 bg-emerald-600 text-white text-sm font-[800] rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all"
+            >
+              {isSubmitting ? (
+                <Loader2 className="animate-spin" size={16} />
+              ) : (
+                <Zap size={16} />
+              )}
+              {isSubmitting ? "Provisioning..." : "Commission Node"}
+            </motion.button>
+          )
         )}
       </div>
     </div>

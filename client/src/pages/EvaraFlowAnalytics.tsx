@@ -8,6 +8,7 @@ import { useDeviceAnalytics } from '../hooks/useDeviceAnalytics';
 import type { NodeInfoData } from '../hooks/useDeviceAnalytics';
 import { computeOnlineStatus } from '../utils/telemetryPipeline';
 import type { FlowConfig } from '../hooks/useDeviceConfig';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TelemetryPayload {
@@ -19,6 +20,7 @@ interface TelemetryPayload {
 
 const EvaraFlowAnalytics = () => {
     const { hardwareId } = useParams<{ hardwareId: string }>();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
@@ -339,9 +341,11 @@ const EvaraFlowAnalytics = () => {
                             </div>
 
                             {saveError && <p className="text-xs font-semibold m-0 mb-3" style={{ color: '#FF3B30' }}>⚠ {saveError}</p>}
-                            <button onClick={handleSave} disabled={saving} className="w-full font-bold py-3.5 rounded-2xl bg-[#0077ff] text-white mt-auto">
-                                {saving ? 'Saving…' : 'Save Configuration'}
-                            </button>
+                            {user?.role === "superadmin" && (
+                                <button onClick={handleSave} disabled={saving} className="w-full font-bold py-3.5 rounded-2xl bg-[#0077ff] text-white mt-auto">
+                                    {saving ? 'Saving…' : 'Save Configuration'}
+                                </button>
+                            )}
                         </div>
                     </div>
 

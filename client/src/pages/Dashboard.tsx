@@ -2,6 +2,9 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAllNodes, subscribeToNodes } from "../services/nodeService";
 import { adminService } from "../services/admin";
+import { socket } from "../services/api";
+import { computeOnlineStatus } from "../utils/telemetryPipeline";
+import { useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
@@ -56,6 +59,20 @@ function Dashboard() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
+
+  // SaaS Architecture: Real-time Status Sync
+  useEffect(() => {
+    const handleUpdate = (data: any) => {
+        const id = data.device_id || data.node_id;
+        if (!id) return;
+        const status = computeOnlineStatus(data.timestamp || data.created_at || data.last_seen, id);
+        setRealtimeStatuses(prev => ({ ...prev, [id]: status }));
+    };
+    socket.on("telemetry_update", handleUpdate);
+    return () => { socket.off("telemetry_update", handleUpdate); };
+  }, []);
+
   // Real-time listener for nodes
   useEffect(() => {
     const unsubscribe = subscribeToNodes((updatedNodes) => {
@@ -68,7 +85,7 @@ function Dashboard() {
   const { totalDevices, onlineDevices, offlineDevices, tankNodes, flowNodes, deepNodes } = useMemo(() => {
     const total = nodes.length;
     const online = nodes.filter(
-      (n) => n.status === "Online",
+      (n) => (realtimeStatuses[n.id] || n.status) === "Online",
     ).length;
     const tank = nodes.filter(
       (n) =>

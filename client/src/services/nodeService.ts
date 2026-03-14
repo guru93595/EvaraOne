@@ -20,7 +20,7 @@ export async function getAllNodes() {
                 hardwareId: data.node_id || data.hardwareId || docId,
                 label: data.label || data.displayName || data.name || "Unnamed Node",
                 name: data.label || data.displayName || data.display_name || data.name || data.hardwareId || docId,
-                status: computeDeviceStatus(data.last_seen || data.updated_at || data.updatedAt),
+                status: computeDeviceStatus(data.last_online_at || data.last_seen || null, docId),
                 asset_type: assetType,
                 device_type: data.device_type || data.assetType || "tank",
                 analytics_template: data.analytics_template || data.analyticsTemplate || (

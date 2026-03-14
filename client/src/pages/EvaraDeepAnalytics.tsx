@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import api from '../services/api';
@@ -8,6 +8,7 @@ import { useDeviceAnalytics } from '../hooks/useDeviceAnalytics';
 import type { NodeInfoData } from '../hooks/useDeviceAnalytics';
 import { computeOnlineStatus } from '../utils/telemetryPipeline';
 import type { DeepConfig } from '../hooks/useDeviceConfig';
+import { useAuth } from '../context/AuthContext';
 
 interface TelemetryPayload {
     timestamp: string;
@@ -17,6 +18,7 @@ interface TelemetryPayload {
 
 const EvaraDeepAnalytics = () => {
     const { hardwareId } = useParams<{ hardwareId: string }>();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
@@ -511,6 +513,14 @@ const EvaraDeepAnalytics = () => {
                                     </div>
                                 )}
                             </div>
+                            <nav className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 justify-center">
+                                <Link to="/nodes" className="hover:text-slate-700 transition-colors">All Nodes</Link>
+                                <span className="text-slate-400">/</span>
+                                <span className="text-slate-700">{deviceInfo?.name || (deviceInfo as any)?.label || 'Deep Node'}</span>
+                            </nav>
+                            <h1 className="text-3xl font-bold tracking-tight m-0 text-center" style={{ color: '#1C1C1E' }}>
+                                {deviceInfo?.name || (deviceInfo as any)?.label || 'Deep Node'} Analytics
+                            </h1>
 
                             {/* Cloud mapping */}
                             <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.4)' }}>
@@ -531,13 +541,15 @@ const EvaraDeepAnalytics = () => {
                                         ))}
                                     </select>
                                 </div>
-                                <button
-                                    onClick={handleSave}
-                                    className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all hover:brightness-110 active:scale-[0.98]"
-                                    style={{ background: 'linear-gradient(135deg,#0077ff,#0055cc)', boxShadow: '0 4px 12px rgba(0,119,255,0.3)' }}
-                                >
-                                    Save Mapping
-                                </button>
+                                {user?.role === "superadmin" && (
+                                    <button
+                                        onClick={handleSave}
+                                        className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all hover:brightness-110 active:scale-[0.98]"
+                                        style={{ background: 'linear-gradient(135deg,#0077ff,#0055cc)', boxShadow: '0 4px 12px rgba(0,119,255,0.3)' }}
+                                    >
+                                        Save Mapping
+                                    </button>
+                                )}
                             </div>
 
                             {/* Physical parameters */}

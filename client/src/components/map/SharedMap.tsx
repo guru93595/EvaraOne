@@ -16,7 +16,9 @@ import {
 } from "../../services/DeviceService";
 import { useRealtimeTelemetry } from "../../hooks/useRealtimeTelemetry";
 import type { MapPipeline } from "../../hooks/useMapPipelines";
+import { socket } from "../../services/api";
 import { getDeviceAnalyticsRoute } from "../../utils/deviceRouting";
+import { computeOnlineStatus } from "../../utils/telemetryPipeline";
 import clsx from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -43,6 +45,7 @@ interface SharedMapProps {
   className?: string;
   activeFilter?: string | null;
   activePipeline?: string | null;
+  isRightPanelOpen?: boolean;
 }
 
 interface HoverPanel {
@@ -65,7 +68,7 @@ const FALLBACK_ICON = L.icon({
 function getDeviceIcon(template: string, status: "Online" | "Offline"): L.Icon | L.DivIcon {
   if (!template) return FALLBACK_ICON;
   const t = template.toLowerCase();
-  
+
   let iconUrl = "";
   if (t.includes("tank") || t.includes("sump") || t === "oht" || t === "evaratank") {
     iconUrl = "/tank.png";
@@ -74,7 +77,7 @@ function getDeviceIcon(template: string, status: "Online" | "Offline"): L.Icon |
   } else if (t.includes("flow") || t.includes("meter") || t.includes("pump") || t === "evaraflow") {
     iconUrl = "/meter.png";
   }
-  
+
   if (!iconUrl) return FALLBACK_ICON;
 
   const dotColor = status === "Online" ? "#22c55e" : "#ef4444";
@@ -107,24 +110,22 @@ function getDeviceIcon(template: string, status: "Online" | "Offline"): L.Icon |
 
 // ─── Mini Telemetry Viz ─────────────────────────────────────────────────────
 
-const MiniTelemetryViz = ({ device }: { device: MapDevice }) => {
-  const { telemetry: snap } = useRealtimeTelemetry(device.id);
-  
+const MiniTelemetryViz = ({ device, snap }: { device: MapDevice; snap: any }) => {
   const t = ((device as any).analytics_template || "").toLowerCase();
 
   // If it's a tank but no telemetry, show a "Syncing" liquid bar at 0% or placeholder
   if (t === "evaratank" || t === "oht" || t === "sump" || device.asset_type === "tank" || device.asset_type === "sump") {
     // Try to get percentage directly, or calculate from raw sensor reading if available
     let pct = snap?.level_percentage ?? 0;
-    
+
     // Fallback calculation for raw socket data
     if (snap && pct === 0 && !snap.level_percentage) {
       const mapping = (device as any).sensor_field_mapping || {};
-      const fieldKey = Object.keys(mapping).find(k => mapping[k].includes("water_level")) || 
-                       (snap.field1 !== undefined ? "field1" : "field2");
+      const fieldKey = Object.keys(mapping).find(k => mapping[k].includes("water_level")) ||
+        (snap.field1 !== undefined ? "field1" : "field2");
       const distance = parseFloat(snap[fieldKey]);
       const depth = (device as any).configuration?.depth || (device as any).tank_size || 1.2;
-      
+
       if (!isNaN(distance) && depth > 0) {
         const validDistance = Math.min(distance / 100, depth);
         const waterHeight = Math.max(0, depth - validDistance);
@@ -323,15 +324,25 @@ const DeviceHoverPanel = ({
   x,
   y,
   onNavigate,
+  isRightPanelOpen,
 }: {
   device: MapDevice;
   x: number;
   y: number;
   onNavigate: (r: string) => void;
+  isRightPanelOpen?: boolean;
 }) => {
+  const { telemetry: snap } = useRealtimeTelemetry(device.id);
+
   const t =
     ((device as any).analytics_template || device.asset_type || "Sensor Node").toLowerCase();
-  const isOnline = device.status === "Online";
+
+  // Real-time status detection based on active WebSocket snap or fallback to device API status
+  const computedStatus = snap
+    ? computeOnlineStatus(snap.timestamp || snap.created_at || snap.last_seen, device.id)
+    : device.status;
+  const isOnline = computedStatus === "Online";
+
   const deviceHardwareId = (device as any).hardwareId || device.id;
   const route = getDeviceAnalyticsRoute({
     id: device.id,
@@ -348,12 +359,22 @@ const DeviceHoverPanel = ({
 
   const panelW = 240;
   const panelH = 180;
-  // Center horizontally over icon, appear above it
+  // Center horizontally over icon
+  // If right panel is open, we offset the right constraint by panel width (320px) + margin
+  const rightConstraint = isRightPanelOpen ? window.innerWidth - 320 - 32 : window.innerWidth - 8;
   const cx = Math.min(
     Math.max(x - panelW / 2, 8),
-    window.innerWidth - panelW - 8,
+    rightConstraint - panelW,
   );
-  const cy = Math.max(y - panelH - 24, 8);
+
+  // Vertical positioning: Default to above the marker.
+  // If space at top is limited (cy < 8), flip to appear below marker.
+  let cy = y - panelH - 24;
+  if (cy < 8) {
+    cy = y + 24; // Appear below marker
+  }
+  // Ultimate constraint: don't go off bottom
+  cy = Math.min(cy, window.innerHeight - panelH - 8);
 
   const displayName = (device as any).displayName || device.label || device.name || (device as any).node_key || deviceHardwareId;
 
@@ -377,7 +398,7 @@ const DeviceHoverPanel = ({
       }}
     >
       <style>{`@keyframes hoverFadeIn{from{opacity:0;transform:translateY(8px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
-      
+
       <div
         style={{
           display: "flex",
@@ -447,7 +468,7 @@ const DeviceHoverPanel = ({
               color: isOnline ? "#16a34a" : "#475569",
             }}
           >
-            {device.status}
+            {computedStatus.toUpperCase()}
           </span>
         </div>
       </div>
@@ -460,7 +481,7 @@ const DeviceHoverPanel = ({
         }}
       />
 
-      <MiniTelemetryViz device={device} />
+      <MiniTelemetryViz device={device} snap={snap} />
 
       <div style={{ marginTop: "18px", pointerEvents: "auto" }}>
         <button
@@ -501,13 +522,29 @@ const SharedMap = ({
   className,
   activeFilter = null,
   activePipeline = null,
+  isRightPanelOpen = false,
 }: SharedMapProps) => {
   const [mapBounds, setMapBounds] = useState<L.LatLngBoundsExpression | null>(
     null,
   );
   const [hoverPanel, setHoverPanel] = useState<HoverPanel | null>(null);
+  const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
+
+  // SaaS Architecture: Real-time Marker Status Sync
+  // This allows markers to turn green the MOMENT data hits our system via WebSockets,
+  // even before the 15-second polling loop finishes.
+  useEffect(() => {
+    const handleUpdate = (data: any) => {
+      const id = data.device_id || data.node_id;
+      if (!id) return;
+      const status = computeOnlineStatus(data.timestamp || data.created_at || data.last_seen, id);
+      setRealtimeStatuses(prev => ({ ...prev, [id]: status }));
+    };
+    socket.on("telemetry_update", handleUpdate);
+    return () => { socket.off("telemetry_update", handleUpdate); };
+  }, []);
 
   const filteredDevices = useMemo(
     () =>
@@ -534,12 +571,12 @@ const SharedMap = ({
     const m = new Map<string, L.Icon | L.DivIcon>();
     for (const d of filteredDevices) {
       const t = (d as any).analytics_template || d.asset_type || "";
-      const s = d.status || "Offline";
+      const s = realtimeStatuses[d.id] || d.status || "Offline";
       const key = `${t}_${s}`;
       if (!m.has(key)) m.set(key, getDeviceIcon(t, s));
     }
     return m;
-  }, [filteredDevices]);
+  }, [filteredDevices, realtimeStatuses]);
 
   useEffect(() => {
     const points = filteredDevices
@@ -587,7 +624,7 @@ const SharedMap = ({
             if (!device.latitude || !device.longitude) return null;
             const t =
               (device as any).analytics_template || device.asset_type || "";
-            const s = device.status || "Offline";
+            const s = realtimeStatuses[device.id] || device.status || "Offline";
             const key = `${t}_${s}`;
             const icon =
               iconMap.get(key) ??
@@ -663,6 +700,7 @@ const SharedMap = ({
           device={hoverPanel.device}
           x={hoverPanel.x}
           y={hoverPanel.y}
+          isRightPanelOpen={isRightPanelOpen}
           onNavigate={(route) => {
             cancelClose();
             setHoverPanel(null);

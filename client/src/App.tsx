@@ -1,7 +1,6 @@
 import React, { useState, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './layouts/AdminLayout';
@@ -138,7 +137,6 @@ function App() {
                     </TenancyProvider>
                 </AuthProvider>
             )}
-            <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>
     );
 }

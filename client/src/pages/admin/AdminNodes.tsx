@@ -137,7 +137,7 @@ const AdminNodes = () => {
 
     try {
       const nodeData = {
-        id: formData.node_key,
+        hardwareId: formData.node_key,
         displayName: formData.label,
         assetType,
         assetSubType: formData.category,
@@ -146,8 +146,8 @@ const AdminNodes = () => {
         customerId: formData.customer_id,
         latitude: parseFloat(formData.lat) || 0,
         longitude: parseFloat(formData.lng) || 0,
-        channelId: formData.thingspeak_channel_id,
-        readApiKey: formData.thingspeak_read_api_key,
+        thingspeakChannelId: formData.thingspeak_channel_id,
+        thingspeakReadKey: formData.thingspeak_read_api_key,
         capacity: parseFloat(formData.capacity) || 0,
         status: "active",
         created_at: new Date().toISOString(),

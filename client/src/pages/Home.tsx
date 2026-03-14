@@ -3,7 +3,7 @@
  * status panel, and system dashboard.
  */
 import { useState } from "react";
-import { Activity, LayoutDashboard } from "lucide-react";
+import { Activity, Droplets, Waves, Database, Zap, ArrowDownCircle } from "lucide-react";
 import clsx from "clsx";
 import SharedMap from "../components/map/SharedMap";
 import { useMapDevices } from "../hooks/useMapDevices";
@@ -11,13 +11,11 @@ import { useMapPipelines } from "../hooks/useMapPipelines";
 
 // Extracted sub-components
 import StatusOverlayPanel from "../components/map/StatusOverlayPanel";
-import SystemDashboardPanel from "../components/map/SystemDashboardPanel";
 import MapLegend from "../components/map/MapLegend";
 
 export const Home = () => {
   const [showIndex, setShowIndex] = useState(false);
   const [showStatusOverview, setShowStatusOverview] = useState(false);
-  const [showSystemDashboard, setShowSystemDashboard] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [activePipeline, setActivePipeline] = useState<string | null>(null);
 
@@ -36,30 +34,35 @@ export const Home = () => {
       devices: devices.filter((d: any) => d.asset_type === "pump"),
       color: "#9333ea",
       bg: "bg-purple-50",
+      icon: <Zap size={12} className="text-purple-600" />,
     },
     {
       name: "Sumps",
       devices: devices.filter((d: any) => d.asset_type === "sump"),
       color: "#16a34a",
       bg: "bg-green-50",
+      icon: <Droplets size={12} className="text-green-600" />,
     },
     {
       name: "Overhead Tanks",
       devices: devices.filter((d: any) => d.asset_type === "tank"),
       color: "#2563eb",
       bg: "bg-blue-50",
+      icon: <Database size={12} className="text-blue-600" />,
     },
     {
       name: "Borewells (IIIT)",
       devices: devices.filter((d: any) => d.asset_type === "bore"),
       color: "#eab308",
       bg: "bg-yellow-50",
+      icon: <Waves size={12} className="text-yellow-600" />,
     },
     {
       name: "Borewells (Govt)",
       devices: devices.filter((d: any) => d.asset_type === "govt"),
       color: "#1e293b",
       bg: "apple-glass-inner",
+      icon: <ArrowDownCircle size={12} className="text-slate-600" />,
     },
   ];
 
@@ -73,14 +76,14 @@ export const Home = () => {
           activePipeline={activePipeline}
           height="100%"
           className="rounded-none border-none shadow-none"
+          isRightPanelOpen={showStatusOverview}
         />
 
         {/* Overlay Buttons */}
-        <div className="absolute top-[120px] lg:top-[140px] right-4 flex flex-col gap-3 z-[400]">
+        <div className="absolute top-[110px] lg:top-[120px] right-4 flex flex-col gap-3 z-[400]">
           <button
             onClick={() => {
               setShowStatusOverview(!showStatusOverview);
-              setShowSystemDashboard(false);
             }}
             className={clsx(
               "apple-glass-card backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-white/40 transition-all group flex items-center gap-3",
@@ -102,31 +105,6 @@ export const Home = () => {
               Status Overview
             </span>
           </button>
-          <button
-            onClick={() => {
-              setShowSystemDashboard(!showSystemDashboard);
-              setShowStatusOverview(false);
-            }}
-            className={clsx(
-              "apple-glass-card backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-white/40 transition-all group flex items-center gap-3",
-              showSystemDashboard &&
-                "ring-2 ring-green-400 shadow-[0_0_15px_rgba(34,197,94,0.5)]",
-            )}
-          >
-            <div
-              className={clsx(
-                "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300",
-                showSystemDashboard
-                  ? "bg-[var(--color-evara-green)] text-white shadow-[0_0_15px_rgba(34,197,94,0.6)]"
-                  : "bg-green-50 text-[var(--color-evara-green)] group-hover:bg-[var(--color-evara-green)] group-hover:text-white",
-              )}
-            >
-              <LayoutDashboard size={20} />
-            </div>
-            <span className="font-semibold text-slate-700 pr-2">
-              System Dashboard
-            </span>
-          </button>
         </div>
 
         {/* Extracted Overlay Panels */}
@@ -134,12 +112,6 @@ export const Home = () => {
           visible={showStatusOverview}
           devices={devices}
           categories={categories}
-        />
-        <SystemDashboardPanel
-          visible={showSystemDashboard}
-          devices={devices}
-          pipelines={pipelines}
-          devicesLoading={devicesLoading}
         />
 
         {/* Subtle Loading Indicators */}

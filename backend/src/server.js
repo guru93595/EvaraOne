@@ -5,6 +5,8 @@ const cors = require("cors");
 const adminRoutes = require("./routes/admin.routes.js");
 const { getDashboardSummary, getHierarchy, getAuditLogs } = require("./controllers/admin.controller.js");
 const { requireAuth, checkOwnership } = require("./middleware/auth.middleware.js");
+const tenantCheck = require("./middleware/tenantCheck.middleware.js");
+const rbac = require("./middleware/rbac.middleware.js");
 const { startWorker, telemetryEvents } = require("./workers/telemetryWorker.js");
 const cache = require("./config/cache.js");
 const apiLimiter = require("./middleware/rateLimit.js");
@@ -66,8 +68,10 @@ app.use(morgan("combined"));
 
 // Consolidate Rate Limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5000, 
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 100, // Limit each IP to 100 requests per `window` (here, per minute)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: { error: "Too many requests, please try again later." }
 });
 app.use("/api/", limiter);
@@ -92,18 +96,39 @@ io.use(async (socket, next) => {
     
     const decodedToken = await admin.auth().verifyIdToken(token);
     
-    // SaaS Architecture: Resolve role from Firestore (same as API auth middleware)
-    let role = "customer";
+    // SaaS Architecture: Resolve role and community from Firestore
+    let userData = { role: "customer" };
     try {
-        const superDoc = await db.collection("superadmins").doc(decodedToken.uid).get();
-        if (superDoc.exists) {
-            role = (superDoc.data().role || "customer").trim().toLowerCase().replace(/\s+/g, "");
+        // Priority 1: Superadmins by ID
+        let userDoc = await db.collection("superadmins").doc(decodedToken.uid).get();
+        if (userDoc.exists) {
+            userData = userDoc.data();
+        } else {
+            // Priority 2: Customers by ID
+            userDoc = await db.collection("customers").doc(decodedToken.uid).get();
+            if (userDoc.exists) {
+                userData = { ...userDoc.data(), id: userDoc.id };
+            } else if (decodedToken.email) {
+                // Priority 3: Customers by Email (Fallback)
+                const emailMatches = await db.collection("customers")
+                    .where("email", "==", decodedToken.email)
+                    .limit(1)
+                    .get();
+                if (!emailMatches.empty) {
+                    const match = emailMatches.docs[0];
+                    userData = { ...match.data(), id: match.id };
+                }
+            }
         }
     } catch (e) {
-        console.warn("[Socket.io] Role lookup failed, defaulting to customer");
+        console.warn("[Socket.io] User lookup failed:", e.message);
     }
+
+    const role = (userData.role || "customer").trim().toLowerCase().replace(/\s+/g, "");
+    const community_id = userData.community_id || "";
+    const customer_id = userData.customer_id || userData.id || "";
     
-    socket.user = { uid: decodedToken.uid, role };
+    socket.user = { uid: decodedToken.uid, role, community_id, customer_id };
     next();
   } catch (err) {
     next(new Error("Authentication error: Invalid token"));
@@ -115,7 +140,7 @@ io.on("connection", (socket) => {
 
     socket.on("subscribe_device", async (deviceId) => {
         // SaaS Architecture: Security Guard (Zero Trust)
-        const isOwner = await checkOwnership(socket.user.uid, deviceId, socket.user.role);
+        const isOwner = await checkOwnership(socket.user.customer_id || socket.user.uid, deviceId, socket.user.role, socket.user.community_id);
         if (isOwner) {
             console.log(`[Socket.io] Client ${socket.user?.uid} subscribed to device ${deviceId}`);
             socket.join(`room:${deviceId}`);
@@ -160,8 +185,11 @@ telemetryEvents.on("telemetry_broadcast", (payload) => {
 
 // Sentry Handlers
 
+// SaaS Architecture: Global Security Stack for Authenticated Routes
+const globalSaaSAuth = [requireAuth, tenantCheck, rbac()];
+
 // Main admin routes
-app.use("/api/v1/admin", requireAuth, adminRoutes);
+app.use("/api/v1/admin", globalSaaSAuth, adminRoutes);
 
 // Node telemetry and analytics routes
 const nodesRoutes = require("./routes/nodes.routes.js");
@@ -175,14 +203,14 @@ app.get("/api/v1/health", (req, res) => {
   });
 });
 
-app.use("/api/v1/nodes", requireAuth, nodesRoutes);
+app.use("/api/v1/nodes", globalSaaSAuth, nodesRoutes);
 
 // Other routes that frontend service calls
-app.get("/api/v1/admin/hierarchy", requireAuth, getHierarchy);
-app.get("/api/v1/admin/audit-logs", requireAuth, getAuditLogs);
-app.get("/api/v1/stats/dashboard/summary", requireAuth, getDashboardSummary);
+app.get("/api/v1/admin/hierarchy", globalSaaSAuth, getHierarchy);
+app.get("/api/v1/admin/audit-logs", globalSaaSAuth, getAuditLogs);
+app.get("/api/v1/stats/dashboard/summary", globalSaaSAuth, getDashboardSummary);
 // Stats route fallback
-app.get("/api/v1/stats/zones", requireAuth, (req, res) => res.json([]));
+app.get("/api/v1/stats/zones", globalSaaSAuth, (req, res) => res.json([]));
 
 // Production: Serve frontend static files (MUST be before error handlers)
 if (process.env.NODE_ENV === "production") {

@@ -33,9 +33,9 @@ const Navbar = () => {
     const primaryDarkActive = '#1D4ED8';
 
     return (
-        <div className="fixed top-3 lg:top-[16px] left-1/2 -translate-x-1/2 z-[2000] w-[96%] md:w-[92%] lg:w-[82%] max-w-[1240px] group transition-all duration-[220ms] ease-out hover:-translate-y-[2px]">
+        <div className="fixed top-3 lg:top-[16px] left-1/2 -translate-x-1/2 z-[2000] w-[98%] md:w-[96%] lg:w-[94%] max-w-[1400px] group transition-all duration-[220ms] ease-out hover:-translate-y-[2px]">
             <nav
-                className="flex items-center justify-between w-full h-[74px] md:h-[86px] rounded-full px-4 md:px-6 overflow-hidden box-border transition-all duration-[220ms]"
+                className="flex items-center justify-between w-full h-[60px] md:h-[68px] rounded-full px-4 md:px-6 overflow-hidden box-border transition-all duration-[220ms]"
                 style={{
                     background: 'rgba(255, 255, 255, 0.2)',
                     backdropFilter: 'blur(40px) saturate(200%)',

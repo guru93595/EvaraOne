@@ -8,7 +8,7 @@ import { Layers } from "lucide-react";
 interface FilterItem {
   key: string;
   label: string;
-  fill: string;
+  iconUrl: string;
   activeBg: string;
   activeRing: string;
 }
@@ -17,43 +17,27 @@ const ASSET_FILTERS: FilterItem[] = [
   {
     key: "EvaraTank",
     label: "EvaraTank",
-    fill: "#4f46e5",
+    iconUrl: "/tank.png",
     activeBg: "bg-indigo-100",
     activeRing: "ring-indigo-400",
   },
   {
     key: "EvaraDeep",
     label: "EvaraDeep",
-    fill: "#0ea5e9",
+    iconUrl: "/borewell.png",
     activeBg: "bg-sky-100",
     activeRing: "ring-sky-400",
   },
   {
     key: "EvaraFlow",
     label: "EvaraFlow",
-    fill: "#06b6d4",
+    iconUrl: "/meter.png",
     activeBg: "bg-cyan-100",
     activeRing: "ring-cyan-400",
   },
 ];
 
-const SVG_ICON = (fill: string) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill={fill}
-    stroke="#ffffff"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="lucide lucide-map-pin"
-  >
-    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
-);
+
 
 interface Props {
   showIndex: boolean;
@@ -120,7 +104,8 @@ export const MapLegend = ({
                   f.activeBg,
                 )}
               >
-                {SVG_ICON(f.fill)}
+                {/* We use an img tag with the actual map marker PNGs */}
+                <img src={f.iconUrl} alt={f.label} className="w-5 h-5 object-contain mix-blend-multiply opacity-90 transition-transform" />
               </div>
               <span className="text-[13px] font-semibold text-slate-700 leading-tight">
                 {f.label}

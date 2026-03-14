@@ -9,14 +9,50 @@ export interface MapDevice extends Partial<Device> {
 
 /**
  * Determine device online/offline status from telemetry timestamp freshness.
+ * Standardized to 1800 seconds (30 minutes) for all devices.
  */
 export function computeDeviceStatus(
-  lastTimestamp: string | null | undefined
+  lastTimestamp: any,
+  deviceId?: string
 ): "Online" | "Offline" {
   if (!lastTimestamp) return "Offline";
-  const ageMs = Date.now() - new Date(lastTimestamp).getTime();
-  const thresholdMs = 1 * 60 * 60 * 1000; // 1 hour for all devices
-  return ageMs < thresholdMs ? "Online" : "Offline";
+
+  try {
+    let date: Date;
+    // Handle Firestore Admin SDK Timestamp object (_seconds) or Client SDK (seconds)
+    if (typeof lastTimestamp === 'object' && lastTimestamp !== null) {
+      if ('_seconds' in lastTimestamp) {
+        date = new Date(lastTimestamp._seconds * 1000);
+      } else if ('seconds' in lastTimestamp) {
+        date = new Date(lastTimestamp.seconds * 1000);
+      } else {
+        date = new Date(lastTimestamp as any);
+      }
+    } else if (typeof lastTimestamp === 'number') {
+        // If it's already a unix timestamp in ms
+        date = new Date(lastTimestamp);
+    } else {
+      date = new Date(lastTimestamp);
+    }
+
+    if (isNaN(date.getTime())) return "Offline";
+
+    const now = Date.now();
+    const ageMs = now - date.getTime();
+    const thresholdMs = 7200 * 1000; // 2 hours threshold as per latest user request
+    
+    const status = ageMs < thresholdMs ? "Online" : "Offline";
+
+    // Requirement Step 8: Debugging Log
+    if (deviceId) {
+      const diffS = Math.floor(ageMs / 1000);
+      console.log(`[StatusCheck] Device: ${deviceId} | LastSeen: ${date.toISOString()} | Diff: ${diffS}s | Status: ${status}`);
+    }
+
+    return status;
+  } catch (err) {
+    return "Offline";
+  }
 }
 
 export interface ProvisioningResult {
@@ -48,20 +84,20 @@ class NodeService {
     filter?: { community_id?: string },
   ) {
     let timeoutId: any;
-    
+
     const poll = async () => {
-        try {
-            const nodes = await this.getMapNodes(filter?.community_id);
-            // Simulate changes or just pass the whole array depending on frontend logic implementation
-            nodes.forEach(node => callback(node));
-        } catch(error) {
-            console.error("Polling nodes failed", error);
-        }
-        timeoutId = setTimeout(poll, 15000); 
+      try {
+        const nodes = await this.getMapNodes(filter?.community_id);
+        // Simulate changes or just pass the whole array depending on frontend logic implementation
+        nodes.forEach(node => callback(node));
+      } catch (error) {
+        console.error("Polling nodes failed", error);
+      }
+      timeoutId = setTimeout(poll, 15000);
     };
-    
+
     poll();
-    
+
     return () => clearTimeout(timeoutId);
   }
 
@@ -92,19 +128,19 @@ class NodeService {
     communityId?: string,
   ) {
     let timeoutId: any;
-    
+
     const poll = async () => {
-        try {
-            const nodes = await this.getMapNodes(communityId);
-            callback(nodes);
-        } catch(error) {
-           console.error("Map nodes polling error:", error);
-        }
-        timeoutId = setTimeout(poll, 15000); 
+      try {
+        const nodes = await this.getMapNodes(communityId);
+        callback(nodes);
+      } catch (error) {
+        console.error("Map nodes polling error:", error);
+      }
+      timeoutId = setTimeout(poll, 15000);
     };
-    
+
     poll();
-    
+
     return () => clearTimeout(timeoutId);
   }
 
@@ -129,7 +165,10 @@ class NodeService {
         firestore_id: docId,
         hardwareId: data.node_id || data.hardwareId || docId,
         name: data.label || data.displayName || data.display_name || data.name || data.hardwareId || docId,
-        status: computeDeviceStatus(data.last_telemetry_seen || data.last_seen || data.updated_at || data.updatedAt),
+        status: computeDeviceStatus(
+          data.last_online_at || data.last_telemetry_seen || data.last_seen || null,
+          docId
+        ),
         asset_type: (data.device_type || data.assetType || data.asset_type || "tank").toLowerCase(),
         analytics_template: data.analyticsTemplate || data.analytics_template || data.device_type || data.assetType || null,
       } as unknown as MapDevice;

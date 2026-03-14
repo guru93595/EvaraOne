@@ -1,6 +1,6 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
-import { deviceService } from "../services/DeviceService";
+import { deviceService, computeDeviceStatus } from "../services/DeviceService";
 
 export interface Device {
   id: string;
@@ -45,10 +45,8 @@ export const useDevices = (
         // Map the DB rows to Device type
         let mappedResult: Device[] = result.map((d: any) => {
           const lastSeen = d.last_seen;
-          const lastSeenDate = lastSeen ? new Date(lastSeen) : null;
-          const isStale = lastSeenDate
-            ? new Date().getTime() - lastSeenDate.getTime() > 10 * 60 * 1000
-            : true;
+          const deviceStatus = computeDeviceStatus(lastSeen, d.id);
+          const isStale = deviceStatus === "Offline";
 
           return {
             id: d.id,
@@ -63,7 +61,7 @@ export const useDevices = (
             capacity: d.capacity || undefined,
             specifications: d.specifications || undefined,
             status: d.status || "active",
-            device_status: isStale ? "offline" : d.device_status || "online",
+            device_status: deviceStatus === "Online" ? "online" : "offline",
             is_active: d.is_active ? "true" : "false",
             community_id: d.community_id || undefined,
             last_seen: lastSeen,

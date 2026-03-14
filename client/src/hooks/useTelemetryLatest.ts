@@ -16,7 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { telemetryService } from '../services/TelemetryService';
 import type { TelemetryData } from '../services/TelemetryService';
 import { computeOnlineStatus } from '../utils/telemetryPipeline';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { socket } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,6 +62,19 @@ export function useTelemetryLatest(
 ): TelemetryLatestResult {
     const enabled = Boolean(deviceId);
     const queryClient = useQueryClient();
+
+    // REQUIREMENT STEP 5: Continuous Status Monitoring
+    // Use local state to trigger re-renders even when data hasn't changed.
+    // This allows the status to flip from 'Online' to 'Offline' automatically while viewing.
+    const [statusTicker, setStatusTicker] = useState(0);
+
+    useEffect(() => {
+        if (!enabled) return;
+        const interval = setInterval(() => {
+            setStatusTicker((prev) => prev + 1);
+        }, 60000); // Check every minute
+        return () => clearInterval(interval);
+    }, [enabled]);
 
     // ─── Realtime WebSocket Integration ─────────────────────────────────────────
     useEffect(() => {
@@ -114,16 +127,16 @@ export function useTelemetryLatest(
             // TelemetryService stores raw fields in result.values; analytics pages
             // need them under result.data — bridge both shapes here.
             return {
-                timestamp:         result.timestamp,
-                data:              (result as unknown as { data?: Record<string, unknown> }).data
-                                   ?? (result.values as Record<string, unknown>)
-                                   ?? {},
-                level_percentage:  result.level_percentage  ?? null,
-                depth_value:       result.depth_value        ?? null,
-                temperature_value: result.temperature_value  ?? null,
-                flow_rate:         result.flow_rate          ?? null,
-                total_liters:      result.total_liters       ?? null,
-                online:            (result as TelemetryData & { online?: boolean | null }).online ?? null,
+                timestamp: result.timestamp,
+                data: (result as unknown as { data?: Record<string, unknown> }).data
+                    ?? (result.values as Record<string, unknown>)
+                    ?? {},
+                level_percentage: result.level_percentage ?? null,
+                depth_value: result.depth_value ?? null,
+                temperature_value: result.temperature_value ?? null,
+                flow_rate: result.flow_rate ?? null,
+                total_liters: result.total_liters ?? null,
+                online: (result as TelemetryData & { online?: boolean | null }).online ?? null,
             };
         },
         enabled,
@@ -137,14 +150,10 @@ export function useTelemetryLatest(
 
     const telemetryData = data ?? null;
 
-    // Prefer the backend-computed `online` boolean (server applies 30-min rule correctly).
-    // Fall back to client-side timestamp computation only when backend flag is unavailable.
-    const onlineStatus: 'Online' | 'Offline' =
-        telemetryData?.online === true
-            ? 'Online'
-            : telemetryData?.online === false
-                ? 'Offline'
-                : computeOnlineStatus(telemetryData?.timestamp ?? null);
+    // Enforce strict 30-min (1800s) timestamp rule universally for real-time accuracy.
+    // We ignore the backend `online` flag as it may use a different heartbeat rule.
+    // statusTicker is included in dependencies if this were a memo, but here it forces the re-eval on every render.
+    const onlineStatus: 'Online' | 'Offline' = computeOnlineStatus(telemetryData?.timestamp ?? null, deviceId ?? undefined);
 
     return { telemetryData, onlineStatus, isLoading, isError, refetch };
 }

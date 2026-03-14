@@ -10,6 +10,8 @@ import clsx from "clsx";
 import { useNodes } from "../hooks/useNodes";
 import { useToast } from "../components/ToastProvider";
 import { getDeviceAnalyticsRoute } from "../utils/deviceRouting";
+import { socket } from "../services/api";
+import { computeOnlineStatus } from "../utils/telemetryPipeline";
 import type { NodeCategory, AnalyticsType } from "../types/database";
 
 // ─── Category config ─────────────────────────────────────────────────────────
@@ -136,6 +138,19 @@ const AllNodes = () => {
 
   // Track shown errors to prevent notification spam
   const shownErrorsRef = useRef<Set<string>>(new Set());
+  const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
+
+  // SaaS Architecture: Real-time Status Override
+  useEffect(() => {
+    const handleUpdate = (data: any) => {
+        const id = data.device_id || data.node_id;
+        if (!id) return;
+        const status = computeOnlineStatus(data.timestamp || data.created_at || data.last_seen, id);
+        setRealtimeStatuses(prev => ({ ...prev, [id]: status }));
+    };
+    socket.on("telemetry_update", handleUpdate);
+    return () => { socket.off("telemetry_update", handleUpdate); };
+  }, []);
 
   // Show toast notification ONCE per unique error - prevents flooding
   useEffect(() => {
@@ -148,7 +163,8 @@ const AllNodes = () => {
   const filtered = useMemo(() => nodes.filter((n) => {
     const matchAnalytics =
       analyticsFilter === "all" || n.analytics_template === analyticsFilter;
-    const matchStatus = statusFilter === "all" || n.status === statusFilter;
+    const currentStatus = realtimeStatuses[n.id] || n.status;
+    const matchStatus = statusFilter === "all" || currentStatus === statusFilter;
     const q = search.toLowerCase();
     const matchSearch =
       !q ||
@@ -158,10 +174,11 @@ const AllNodes = () => {
     return matchAnalytics && matchStatus && matchSearch;
   }), [nodes, analyticsFilter, statusFilter, search]);
 
-  const { onlineCount, offlineCount } = useMemo(() => ({
-    onlineCount: nodes.filter((n) => n.status === "Online").length,
-    offlineCount: nodes.filter((n) => n.status === "Offline").length,
-  }), [nodes]);
+  const { onlineCount, offlineCount } = useMemo(() => {
+    const online = nodes.filter(n => (realtimeStatuses[n.id] || n.status) === "Online").length;
+    const offline = nodes.filter(n => (realtimeStatuses[n.id] || n.status) === "Offline").length;
+    return { onlineCount: online, offlineCount: offline };
+  }, [nodes, realtimeStatuses]);
 
   return (
     <div className="min-h-screen bg-transparent relative flex flex-col pt-[85px] lg:pt-[95px]">
@@ -353,7 +370,8 @@ const AllNodes = () => {
               const cfg =
                 CATEGORY_CONFIG[(node.category as NodeCategory) || "OHT"] ||
                 CATEGORY_CONFIG["OHT"];
-              const isOnline = node.status === "Online";
+              const currentStatus = realtimeStatuses[node.id] || node.status;
+              const isOnline = currentStatus === "Online";
               return (
                 <Link
                   key={node.node_key || node.id}
@@ -395,7 +413,7 @@ const AllNodes = () => {
                               : "bg-red-400",
                           )}
                         />
-                        {node.status}
+                        {currentStatus}
                       </span>
                     </div>
 

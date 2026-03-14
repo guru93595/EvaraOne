@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { db } = require("../config/firebase.js");
+const { db, admin } = require("../config/firebase.js");
 const cacheService = require("../services/cacheService.js"); 
 const cache = require("../config/cache.js");
 
@@ -42,7 +42,7 @@ async function getActiveDevices() {
         const typeBatches = await Promise.all(
             Object.keys(typedGroups).map(async (type) => {
                 const ids = typedGroups[type];
-                const refs = ids.map(id => db.collection(type).doc(id));
+                const refs = ids.map(id => db.collection(type.toLowerCase()).doc(id));
                 const metas = await db.getAll(...refs);
                 return metas.map(m => m.exists ? { id: m.id, meta: m.data() } : null).filter(Boolean);
             })
@@ -120,16 +120,29 @@ async function processDevice(device) {
         // SYNC to Firebase (SaaS Architecture: Throttled Writes to save cost)
         const lastSyncKey = `last_sync_${device.id}`;
         const lastSync = cacheService.get(lastSyncKey);
-        const shouldSync = !lastSync || (new Date() - new Date(lastSync) > 10 * 60 * 1000); 
+        const now = new Date();
+        const shouldSyncFull = !lastSync || (now - new Date(lastSync) > 10 * 60 * 1000); 
 
-        if (shouldSync) {
-            db.collection(device.type).doc(device.id).update({
+        // CRITICAL FIX: Always update last_online_at using Server Timestamp for status detection, 
+        // but throttle heavy metadata updates (distance, level) to save Firestore writes.
+        const updateData = {
+            last_online_at: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (shouldSyncFull) {
+            Object.assign(updateData, {
                 last_seen: newTime,
-                last_telemetry_fetch: new Date().toISOString()
-            }).then(() => {
-                cacheService.set(lastSyncKey, new Date().toISOString(), 3600);
-            }).catch(e => console.error("Worker Sync Error:", e.message));
+                last_telemetry_fetch: now.toISOString()
+            });
         }
+
+        db.collection(device.type.toLowerCase()).doc(device.id).update(updateData).then(() => {
+            if (shouldSyncFull) cacheService.set(lastSyncKey, now.toISOString(), 3600);
+            
+            // Debugging Log (Step 8 of requirement)
+            const timeDiff = Math.floor((now - new Date(newTime)) / 1000);
+            console.log(`[StatusCheck] Device: ${device.id} | Last Data: ${newTime} | Delay: ${timeDiff}s | Updating last_online_at`);
+        }).catch(e => console.error("Worker Sync Error:", e.message));
 
         // BROADCAST to Socket.io via Redis Pub/Sub (SaaS Architecture: Distributed Scaling)
         if (pub) {
@@ -148,12 +161,41 @@ async function runPoll() {
     const devices = await getActiveDevices();
     if (devices.length === 0) return;
 
+    const now = new Date();
+
     // Process in batches so we don't accidentally Ddos Thingspeak
     for (let i = 0; i < devices.length; i += BATCH_SIZE) {
         const batch = devices.slice(i, i + BATCH_SIZE);
         await Promise.all(batch.map(d => processDevice(d)));
         // Tiny 50ms sleep between batches
         await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    // --- SaaS Architecture: Active Device Heartbeat (30s threshold) ---
+    for (const device of devices) {
+        // Read the last known update time from cache or metadata
+        const cacheKey = `status_${device.id}`;
+        const lastKnownTime = cacheService.get(cacheKey) || device.last_seen;
+        
+        if (lastKnownTime) {
+            const timeSinceLastData = now - new Date(lastKnownTime);
+            // If we haven't received new Telemetry Data in 60+ seconds (missed 2 polls)
+            if (timeSinceLastData > 60000) {
+                // Ensure Firebase knows it's offline (throttle writes via cache limit)
+                const offlineSyncKey = `offline_sync_${device.id}`;
+                if (!cacheService.get(offlineSyncKey)) {
+                    // Update Firestore to remove 'last_online_at' which breaks the 1hr heartbeat
+                    db.collection(device.type.toLowerCase()).doc(device.id).update({
+                        // By leaving last_seen but not updating last_online_at locally,
+                        // the UI will naturally fall into its offline state.
+                        status_note: "Heartbeat Lost"
+                    }).catch(e => console.error("Heartbeat Sync Error:", e.message));
+                    
+                    // Prevent spamming Firestore with offline writes every 5 seconds
+                    cacheService.set(offlineSyncKey, true, 300); // Wait 5 mins before trying again
+                }
+            }
+        }
     }
 }
 

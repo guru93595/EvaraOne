@@ -1,5 +1,5 @@
 import { computeDeviceStatus } from '../services/DeviceService';
 
-export const computeOnlineStatus = (lastSeen: string | null): 'Online' | 'Offline' => {
-    return computeDeviceStatus(lastSeen);
+export const computeOnlineStatus = (lastSeen: string | null, deviceId?: string): 'Online' | 'Offline' => {
+    return computeDeviceStatus(lastSeen, deviceId);
 };

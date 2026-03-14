@@ -163,7 +163,8 @@ export const useDeviceAnalytics = (hardwareIdOverride?: string): AnalyticsData =
       },
       history: {
         feeds: telemetryResult?.history || []
-      }
+      },
+      tankBehavior: telemetryResult?.tankBehavior
     };
   }, [device, telemetryResult, realtimeData]);
 

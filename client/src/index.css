@@ -121,7 +121,11 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background-color: transparent;
+  background-image: url('/background.png') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
   color: #1F2937;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -418,8 +422,8 @@ body {
 /* Base Apple Glass Card */
 .apple-glass-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.22);
-  /* Intense translucency */
+  background: rgba(255, 255, 255, 0.08);
+  /* More transparent to let background show through */
   backdrop-filter: saturate(200%) blur(40px);
   -webkit-backdrop-filter: saturate(200%) blur(40px);
   border: 1px solid rgba(255, 255, 255, 0.6);
@@ -593,18 +597,37 @@ body {
   color: white !important;
 }
 
+/* Global cursor and text selection fix */
+* {
+  cursor: default !important;
+  user-select: none;
+}
+
+/* Re-enable text selection and cursor for actual inputs and text areas */
+input, textarea, [contenteditable="true"] {
+  cursor: text !important;
+  user-select: text !important;
+}
+
+/* Re-enable selection for buttons that need it */
+button {
+  user-select: none;
+}
+
 /* ── Map badge markers ────────────────────────────────────────────────── */
 .evara-map-badge {
   background: transparent !important;
   border: none !important;
   cursor: pointer;
 }
-.evara-map-badge > div > div:first-child {
+
+.evara-map-badge>div>div:first-child {
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
 }
-.evara-map-badge:hover > div > div:first-child {
+
+.evara-map-badge:hover>div>div:first-child {
   transform: scale(1.12) translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.9), inset 0 2px 12px rgba(255,255,255,0.4) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.9), inset 0 2px 12px rgba(255, 255, 255, 0.4) !important;
 }
 
 /* ── Custom Map Tooltip ──────────────────────────────────────────────── */
@@ -612,7 +635,8 @@ body {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: #0f172a !important; /* Premium dark slate/black */
+  color: #0f172a !important;
+  /* Premium dark slate/black */
   font-weight: 900 !important;
   font-size: 11px !important;
   padding: 0 !important;
@@ -653,18 +677,21 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      transparent 100%);
   animation: liquid-shimmer 2s infinite;
 }
 
 @keyframes liquid-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .liquid-glass-progress-waves {
@@ -680,8 +707,13 @@ body {
 }
 
 @keyframes wave-flow {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 /* ── Micro-interaction button press feedback ─────────────────────────── */
@@ -696,7 +728,15 @@ a:active {
 .panel-slide-in {
   animation: panelSlideIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
 @keyframes panelSlideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
