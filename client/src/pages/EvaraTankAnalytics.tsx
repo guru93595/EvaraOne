@@ -588,23 +588,7 @@ const EvaraTankAnalytics = () => {
                             </div>
 
                             <div className="flex flex-col mt-auto pt-4 gap-2 z-10 w-full">
-                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 w-full">
-                                    <div className="text-left rounded-xl p-2 flex flex-col justify-center" style={{ background: 'rgba(10,132,255,0.05)', border: '1px solid rgba(10,132,255,0.1)' }}>
-                                        <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#0A84FF' }}>Water Level</p>
-                                        <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#0A84FF' }}>{Math.round(pct)}%</p>
-                                    </div>
-                                    <div className="text-left rounded-xl p-2 flex flex-col justify-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                                        <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#8E8E93' }}>Water Height</p>
-                                        <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#1C1C1E' }}>{waterAnalytics.waterHeightM.toFixed(1)} m</p>
-                                    </div>
-                                    <div className="text-left rounded-xl p-2 flex flex-col justify-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                                        <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#8E8E93' }}>Sensor</p>
-                                        <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#1C1C1E' }}>{waterAnalytics.sensorDistanceM.toFixed(2)} m</p>
-                                    </div>
-                                    <div className="text-left rounded-xl p-2 flex flex-col justify-center" style={{ background: 'rgba(52,199,89,0.05)', border: '1px solid rgba(52,199,89,0.1)' }}>
-                                        <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#34C759' }}>Available</p>
-                                        <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#115C29' }}>{Math.round(metrics.volumeLitres).toLocaleString()} L</p>
-                                    </div>
+                                <div className="grid grid-cols-2 gap-2 w-full">
                                     <div className="text-left rounded-xl p-2 flex flex-col justify-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)' }}>
                                         <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#8E8E93' }}>Total Cap</p>
                                         <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#1C1C1E' }}>{Math.round(metrics.capacityLitres).toLocaleString()} L</p>
