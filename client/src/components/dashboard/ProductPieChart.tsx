@@ -1,5 +1,4 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { LayoutDashboard } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ProductPieChartProps {
@@ -16,23 +15,22 @@ export const ProductPieChart = ({
     className
 }: ProductPieChartProps) => {
     const data = [
-        { name: 'EvaraTank', value: tank, color: '#3A7AFE' },
-        { name: 'EvaraFlow', value: flow, color: '#0891B2' },
-        { name: 'EvaraDeep', value: deep, color: '#7C3AED' }
+        { name: 'EvaraTank', value: Math.max(tank, 0.01), color: '#3A7AFE' },
+        { name: 'EvaraFlow', value: Math.max(flow, 0.01), color: '#0891B2' },
+        { name: 'EvaraDeep', value: Math.max(deep, 0.01), color: '#7C3AED' }
     ];
 
     return (
-        <div className={clsx("apple-glass-card p-[24px] rounded-[50px] flex flex-col h-full", className)}>
-            <div className="flex justify-between items-center mb-3">
-                <span className="text-[14px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] leading-none">Product Distribution</span>
-                <LayoutDashboard size={18} className="text-gray-400/60" />
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center relative min-h-0">
-                <div className="w-full h-full max-h-[220px]">
+        <div className={clsx("apple-glass-card px-[20px] py-[16px] rounded-[20px] flex flex-col h-full", className)}>
+            <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-2 shrink-0">Product Distribution</span>
+            <div className="flex-1 flex items-center gap-3 min-h-0">
+                {/* Pie */}
+                <div className="flex-shrink-0" style={{ width: 80, height: 80 }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                            <Tooltip
+                                contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 11 }}
+                            />
                             <Pie
                                 data={data}
                                 cx="50%"
@@ -40,8 +38,8 @@ export const ProductPieChart = ({
                                 innerRadius={0}
                                 outerRadius="90%"
                                 dataKey="value"
-                                stroke="rgba(255,255,255,0.4)"
-                                strokeWidth={3}
+                                stroke="rgba(255,255,255,0.5)"
+                                strokeWidth={2}
                             >
                                 {data.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -50,16 +48,15 @@ export const ProductPieChart = ({
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
-            </div>
-
-            {/* Simple Legend */}
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-2">
-                {data.map((item) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-[11px] font-[700] text-gray-500 uppercase tracking-tight">{item.name}</span>
-                    </div>
-                ))}
+                {/* Legend on the right */}
+                <div className="flex flex-col gap-2">
+                    {data.map((item) => (
+                        <div key={item.name} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                            <span className="text-[10px] font-[700] text-gray-500 uppercase tracking-tight">{item.name}</span>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
