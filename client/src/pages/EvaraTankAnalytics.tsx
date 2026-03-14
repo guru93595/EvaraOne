@@ -524,7 +524,7 @@ const EvaraTankAnalytics = () => {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch w-full">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch w-full">
                         {/* TANK VISUALIZER */}
                         <div className="apple-glass-card rounded-[2.5rem] p-6 flex flex-col relative overflow-hidden h-full flex-grow">
                             <div className="flex justify-between items-center mb-2 z-10 w-full">
@@ -617,9 +617,9 @@ const EvaraTankAnalytics = () => {
                         </div>
 
                         {/* COMBINED HISTORY CHART AND RATE CARDS */}
-                        <div className="lg:col-span-2 flex flex-col gap-4 w-full h-full">
+                        <div className="lg:col-span-2 flex flex-col gap-2 w-full h-full">
                             {/* RATE CARDS */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 w-full">
                                 <div className="apple-glass-card text-left rounded-[1.5rem] p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px' }}>
                                     <div className="flex items-start">
                                         <div className="flex items-center justify-center rounded-xl w-10 h-10" style={{ background: 'rgba(52,199,89,0.15)' }}>
@@ -761,7 +761,7 @@ const EvaraTankAnalytics = () => {
                             <h2 className="text-xl font-bold m-0" style={{ color: '#1C1C1E' }}>Tank Behavior Analytics</h2>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             {/* REFILL BEHAVIOR CARD */}
                             <div className="apple-glass-card rounded-[2rem] p-6 flex flex-col gap-4"
                                 style={{ background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
@@ -888,7 +888,7 @@ const EvaraTankAnalytics = () => {
                         </button>
                         
                         {showSecondaryInsights && (
-                            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <div className="apple-glass-card p-4 rounded-xl flex flex-col justify-center gap-1" style={{ background: 'rgba(255,59,48,0.05)', border: '1px solid rgba(255,59,48,0.1)' }}>
                                     <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#FF3B30' }}>Low Water Alert</span>
                                     <span className="text-sm font-black text-[#1C1C1E] tracking-tight">{pct < 20 ? 'Triggered (Below 20%)' : 'Normal'}</span>
@@ -926,7 +926,7 @@ const EvaraTankAnalytics = () => {
                         </button>
                         
                         {showAdvancedAnalytics && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <div className="apple-glass-card p-4 rounded-xl flex flex-col gap-0.5 justify-center" style={{ background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.3)' }}>
                                     <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#8E8E93' }}>Yesterday's Consump.</span>
                                     <span className="text-lg font-black text-[#1C1C1E] tracking-tight">{tankBehavior?.consumptionAnalytics?.yesterdayConsumption?.toLocaleString() ?? 0} <span className="text-[12px] font-bold" style={{ color: '#8E8E93' }}>L</span></span>
