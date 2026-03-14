@@ -363,7 +363,7 @@ const EvaraTankAnalytics = () => {
                         {showParams && (
                             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}
                                 onClick={() => setShowParams(false)}>
-                                <div className="rounded-[1.5rem] p-6 flex flex-col w-full max-w-sm"
+                                <div className="rounded-2xl p-6 flex flex-col w-full max-w-sm"
                                     style={{ background: '#e5e5e5', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', maxHeight: '90vh', overflowY: 'auto' }}
                                     onClick={e => e.stopPropagation()}>
 
@@ -440,7 +440,7 @@ const EvaraTankAnalytics = () => {
                     {showNodeInfo && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-20" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}
                             onClick={() => setShowNodeInfo(false)}>
-                            <div className="rounded-[1.5rem] p-6 flex flex-col w-full max-w-2xl"
+                            <div className="rounded-2xl p-6 flex flex-col w-full max-w-2xl"
                                 style={{
                                     background: 'linear-gradient(145deg, #e8f0fe 0%, #d1e3f4 50%, #b8d4e8 100%)',
                                     boxShadow: '0 20px 40px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3)'
@@ -626,7 +626,7 @@ const EvaraTankAnalytics = () => {
                         <div className="lg:col-span-2 flex flex-col gap-4 w-full h-full">
                             {/* RATE CARDS */}
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
-                                <div className="apple-glass-card text-left rounded-[1.5rem] p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
+                                <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center justify-center rounded-xl w-10 h-10" style={{ background: 'rgba(52,199,89,0.15)' }}>
                                             <TrendingUp size={22} color="#34C759" />
@@ -642,7 +642,7 @@ const EvaraTankAnalytics = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="apple-glass-card text-left rounded-[1.5rem] p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
+                                <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center justify-center rounded-xl w-10 h-10" style={{ background: 'rgba(255,59,48,0.15)' }}>
                                             <TrendingDown size={22} color="#FF3B30" />
@@ -658,7 +658,7 @@ const EvaraTankAnalytics = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="apple-glass-card text-left rounded-[1.5rem] p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
+                                <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center justify-center rounded-xl w-10 h-10" style={{ background: 'rgba(175,82,222,0.15)' }}>
                                             <Bell size={22} color="#AF52DE" />
@@ -672,7 +672,7 @@ const EvaraTankAnalytics = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="apple-glass-card text-left rounded-[1.5rem] p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
+                                <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', minHeight: '130px', position: 'relative' }}>
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center justify-center rounded-xl w-10 h-10" style={{ background: 'rgba(10,132,255,0.15)' }}>
                                             <Wifi size={22} color="#0A84FF" />
@@ -693,7 +693,7 @@ const EvaraTankAnalytics = () => {
                                 background: 'rgba(255, 255, 255, 0.25)',
                                 backdropFilter: 'blur(20px)',
                                 WebkitBackdropFilter: 'blur(20px)',
-                                borderRadius: '24px',
+                                borderRadius: '16px',
                                 border: '1px solid rgba(255,255,255,0.35)',
                                 boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
                                 padding: '24px',
@@ -762,7 +762,7 @@ const EvaraTankAnalytics = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full mt-4">
                         {/* Estimation Cards */}
                         <div className="grid grid-cols-2 gap-4 w-full">
-                            <div className="apple-glass-card p-4 rounded-3xl flex flex-col justify-between" style={{ background: 'rgba(255, 149, 0, 0.1)', border: '1px solid rgba(255, 149, 0, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(255, 149, 0, 0.05)' }}>
+                            <div className="apple-glass-card p-4 rounded-2xl flex flex-col justify-between" style={{ background: 'rgba(255, 149, 0, 0.1)', border: '1px solid rgba(255, 149, 0, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(255, 149, 0, 0.05)' }}>
                                 <div className="flex justify-between items-start">
                                     <div className="p-1.5 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.15)' }}>
                                         <Timer size={18} color="#FF9500" />
@@ -778,7 +778,7 @@ const EvaraTankAnalytics = () => {
                                     </span>
                                 </div>
                             </div>
-                            <div className="apple-glass-card p-4 rounded-3xl flex flex-col justify-between" style={{ background: 'rgba(10, 132, 255, 0.1)', border: '1px solid rgba(10, 132, 255, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(10, 132, 255, 0.05)' }}>
+                            <div className="apple-glass-card p-4 rounded-2xl flex flex-col justify-between" style={{ background: 'rgba(10, 132, 255, 0.1)', border: '1px solid rgba(10, 132, 255, 0.2)', minHeight: '130px', boxShadow: '0 8px 32px rgba(10, 132, 255, 0.05)' }}>
                                 <div className="flex justify-between items-start">
                                     <div className="p-1.5 rounded-lg" style={{ background: 'rgba(10, 132, 255, 0.15)' }}>
                                         <Droplets size={18} color="#0A84FF" />
@@ -800,7 +800,7 @@ const EvaraTankAnalytics = () => {
 
                         {/* TODAY'S EVENT TIMELINE */}
                         <div className="lg:col-span-2">
-                            <div className="apple-glass-card p-5 rounded-[2rem]" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)' }}>
+                            <div className="apple-glass-card p-5 rounded-[1.25rem]" style={{ background: 'rgba(255, 255, 255, 0.25)', border: '1px solid rgba(255,255,255,0.35)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)' }}>
                                 <div className="flex justify-between items-center mb-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(10,132,255,0.1)' }}>

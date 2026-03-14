@@ -428,8 +428,8 @@ body {
   -webkit-backdrop-filter: saturate(200%) blur(40px);
   border: 1px solid rgba(255, 255, 255, 0.6);
   /* Clean white rim */
-  border-radius: 32px;
-  /* More premium curvature */
+  border-radius: 20px;
+  /* More premium curvature - reduced for sleek look */
   box-shadow:
     0 4px 20px rgba(148, 163, 184, 0.25),
     0 8px 32px 0 rgba(0, 0, 0, 0.08),
@@ -489,7 +489,7 @@ body {
   background: rgba(255, 255, 255, 0.15);
   /* More translucent inner panels */
   border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 20px;
+  border-radius: 12px;
   backdrop-filter: saturate(150%) blur(24px);
   -webkit-backdrop-filter: saturate(150%) blur(24px);
   box-shadow: 0 4px 12px rgba(148, 163, 184, 0.15);
