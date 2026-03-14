@@ -594,7 +594,7 @@ const EvaraTankAnalytics = () => {
                                         <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#1C1C1E' }}>{Math.round(metrics.capacityLitres).toLocaleString()} L</p>
                                     </div>
                                     <div className="text-left rounded-xl p-2 flex flex-col justify-center" style={{ background: 'rgba(255,149,0,0.05)', border: '1px solid rgba(255,149,0,0.1)' }}>
-                                        <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#FF9500' }}>Remaining</p>
+                                        <p className="text-[8px] font-bold uppercase tracking-wider m-0 mb-0.5" style={{ color: '#FF9500' }}>Remaining Capacity</p>
                                         <p className="text-sm font-black m-0 tracking-tight" style={{ color: '#995900' }}>{Math.round(waterAnalytics.remainingCapacityLiters).toLocaleString()} L</p>
                                     </div>
                                 </div>
