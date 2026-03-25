@@ -22,10 +22,10 @@ const EvaraDeepAnalytics = React.lazy(() => import('./pages/EvaraDeepAnalytics')
 const EvaraFlowAnalytics = React.lazy(() => import('./pages/EvaraFlowAnalytics'));
 const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminCustomers = React.lazy(() => import('./pages/admin/AdminCustomers'));
-const CommunityCustomers = React.lazy(() => import('./pages/admin/hierarchy/CommunityCustomers'));
+
 const CustomerDetails = React.lazy(() => import('./pages/admin/hierarchy/CustomerDetails'));
 const ZonesOverview = React.lazy(() => import('./pages/admin/hierarchy/ZonesOverview'));
-const ZoneCommunities = React.lazy(() => import('./pages/admin/hierarchy/ZoneCommunities'));
+
 const ZoneCustomers = React.lazy(() => import('./pages/admin/hierarchy/ZoneCustomers'));
 const AdminConfig = React.lazy(() => import('./pages/admin/AdminConfig'));
 
@@ -59,7 +59,7 @@ const GlobalBackground = ({ children }: { children: React.ReactNode }) => {
                     <div className="absolute top-[20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#CFEDE6]/20 blur-[180px] animate-blob animation-delay-2000 mix-blend-multiply opacity-40"></div>
                     <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[60%] rounded-full bg-[#D7ECFF]/20 blur-[160px] animate-blob animation-delay-4000 mix-blend-multiply opacity-30"></div>
                     {/* Additional overlay blur to enhance glass textures */}
-                    <div className="absolute inset-0 backdrop-blur-[12px] z-0"></div>
+                    <div className="absolute inset-0 backdrop-blur-[4px] z-0"></div>
                 </div>
             )}
             <div className="relative z-10 w-full min-h-screen">
@@ -111,8 +111,7 @@ function App() {
 
                                                     {/* Hierarchy Routes */}
                                                     <Route path="zones" element={<ZonesOverview />} />
-                                                    <Route path="zones/:regionId" element={<ZoneCommunities />} />
-                                                    <Route path="communities/:communityId" element={<CommunityCustomers />} />
+
                                                     <Route path="customers/:customerId" element={
                                                         <ErrorBoundary>
                                                             <CustomerDetails />

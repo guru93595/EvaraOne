@@ -162,13 +162,13 @@ io.on("connection", (socket) => {
 const pubSub = cache.getPubSub();
 if (pubSub) {
     const sub = pubSub.sub;
-    sub.psubscribe("telemetry:*");
+    sub.psubscribe("device:update:*");
     sub.on("pmessage", (pattern, channel, message) => {
         try {
             const payload = JSON.parse(message);
-            const deviceId = channel.split(":")[1];
+            const deviceId = channel.split(":")[2];
             if (deviceId) {
-                io.to(`room:${deviceId}`).emit("telemetry_update", payload);
+                io.to(`room:${deviceId}`).emit("device:update", payload);
             }
         } catch (err) {}
     });
@@ -176,9 +176,9 @@ if (pubSub) {
 
 // Local bridge for telemetryWorker (Dev/Single-instance fallback)
 // Node.js EventEmitter doesn't support regex patterns — use explicit wildcard
-telemetryEvents.on("telemetry_broadcast", (payload) => {
-    if (payload && payload.device_id) {
-        io.to(`room:${payload.device_id}`).emit("telemetry_update", payload);
+telemetryEvents.on("device:update", (payload) => {
+    if (payload && payload.deviceId) {
+        io.to(`room:${payload.deviceId}`).emit("device:update", payload);
     }
 });
 

@@ -1,56 +1,55 @@
-import { useEffect, useState } from "react";
-import { socket } from "../services/api";
-import { deviceService } from "../services/DeviceService";
+import { useState, useEffect } from 'react';
+import { socket } from '../services/api';
 
-export const useRealtimeTelemetry = (nodeId: string, initialData: any = null) => {
-    const [telemetry, setTelemetry] = useState<any>(initialData);
-    const [lastSync, setLastSync] = useState<string>("");
+/**
+ * Hook to subscribe to real-time telemetry updates for a specific device via WebSockets.
+ */
+export const useRealtimeTelemetry = (deviceId: string | undefined) => {
+    const [telemetry, setTelemetry] = useState<any>(null);
+    const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
 
     useEffect(() => {
-        if (!nodeId) return;
+        if (!deviceId) return;
 
-        // SaaS Architecture: Join the specific room for this device
-        // This prevents the server from broadcasting to ALL connected clients
-        socket.emit("subscribe_device", nodeId);
-
-        if (initialData) {
-            setTelemetry(initialData);
-            setLastSync(new Date().toLocaleTimeString());
-        }
-
-        // ─── Instant Polling Backup (5s) ───
-        // ensures data is fresh even if WebSocket pulse is missed
-        const poll = async () => {
-            try {
-                const data = await deviceService.getNodeTelemetry(nodeId);
-                if (data) {
-                    setTelemetry(data);
-                    setLastSync(new Date().toLocaleTimeString());
-                }
-            } catch (err) {}
+        const onConnect = () => {
+            setStatus('connected');
+            socket.emit('subscribe_device', deviceId);
         };
-        
-        // Initial fetch
-        poll();
-        const pollInterval = setInterval(poll, 5000);
 
-        const handleUpdate = (data: any) => {
-            // Validate the payload is for this node
-            if (data.device_id === nodeId || data.node_id === nodeId) {
+        const onDisconnect = () => {
+            setStatus('connecting');
+        };
+
+        const onTelemetryUpdate = (data: any) => {
+            // Ensure the update is for the current device
+            if (data.device_id === deviceId || data.node_id === deviceId || data.id === deviceId) {
                 setTelemetry(data);
-                setLastSync(new Date().toLocaleTimeString());
             }
         };
 
-        const eventName = "telemetry_update";
-        socket.on(eventName, handleUpdate);
+        // If already connected, subscribe immediately
+        if (socket.connected) {
+            onConnect();
+        }
+
+        socket.on('connect', onConnect);
+        socket.on('disconnect', onDisconnect);
+        socket.on('telemetry_update', onTelemetryUpdate);
+
+        // Emit subscription
+        socket.emit('subscribe_device', deviceId);
 
         return () => {
-            socket.emit("unsubscribe_device", nodeId);
-            socket.off(eventName, handleUpdate);
-            clearInterval(pollInterval);
+            socket.off('connect', onConnect);
+            socket.off('disconnect', onDisconnect);
+            socket.off('telemetry_update', onTelemetryUpdate);
+            socket.emit('unsubscribe_device', deviceId);
         };
-    }, [nodeId, initialData]);
+    }, [deviceId]);
 
-    return { telemetry, lastSync };
+    return { 
+        telemetry, 
+        status,
+        isConnected: status === 'connected' 
+    };
 };

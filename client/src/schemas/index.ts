@@ -48,7 +48,6 @@ export const customerSchema = z
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
     phone_number: z.string().optional(),
-    community_id: z.string().min(1, "Please select a valid community"),
     role: z.enum(["customer", "distributor", "operator", "viewer"]),
     status: z.enum(["active", "pending", "suspended", "inactive"]),
   })
@@ -96,7 +95,6 @@ export const deviceSchema = z.object({
   length: z.string().optional(),
   breadth: z.string().optional(),
   node_key: z.string().min(4, "Node key (Hardware ID) is required"),
-  community_id: z.string().min(1, "Community is required"),
   customer_id: z
     .string()
     .min(1, "Customer assignment is strictly required for hierarchy"),

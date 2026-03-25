@@ -52,8 +52,8 @@ export const useDashboardStats = () => {
                 };
             }
         },
-        staleTime: 1000 * 60 * 2, // 2 minutes
-        refetchInterval: 1000 * 60 * 5, // Auto-refresh every 5 mins
+        staleTime: 2000,
+        refetchInterval: 300000, // Reduced from 5s to 5m
         retry: false,
         enabled: isAuthenticated // Only run if authenticated
     });

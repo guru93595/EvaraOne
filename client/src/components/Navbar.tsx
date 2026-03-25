@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Database, LogOut, Crown, Map } from 'lucide-react';
+import { LayoutGrid, Server, Shield, MapPin, LogOut } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { useTenancy } from '../context/TenancyContext';
@@ -11,13 +11,13 @@ const Navbar = () => {
     useTenancy(); // Keep hook active for context side-effects if any
 
     const navItems = [
-        { name: 'MAP', path: '/map', icon: Map },
-        { name: 'DASHBOARD', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'ALL NODES', path: '/nodes', icon: Database },
+        { name: 'MAP', path: '/map', icon: MapPin },
+        { name: 'DASHBOARD', path: '/dashboard', icon: LayoutGrid },
+        { name: 'ALL NODES', path: '/nodes', icon: Server },
         // Show SUPER ADMIN nav only for superadmin role
-        ...(user?.role === 'superadmin' ? [{ name: 'SUPER ADMIN', path: '/superadmin', icon: Crown }] : []),
-        // Show ADMINISTRATION for admin role only (not for customer)
-        ...(user?.role === 'admin' ? [{ name: 'ADMINISTRATION', path: '/admin', icon: LayoutDashboard }] : []),
+        ...(user?.role === 'superadmin' ? [{ name: 'SUPER ADMIN', path: '/superadmin', icon: Shield }] : []),
+        // Show ADMINISTRATION for community_admin role only (not for customer)
+        ...(user?.role === 'community_admin' ? [{ name: 'ADMINISTRATION', path: '/admin', icon: LayoutGrid }] : []),
     ];
 
     const handleLogout = async () => {
@@ -131,10 +131,10 @@ const Navbar = () => {
                                         {user.displayName}
                                     </span>
                                     <span className={`text-[10px] font-bold uppercase tracking-wider leading-tight ${user.role === 'superadmin' ? 'text-blue-600' :
-                                            user.role === 'admin' ? 'text-emerald-600' : 'text-slate-400'
+                                            user.role === 'community_admin' ? 'text-emerald-600' : 'text-slate-400'
                                         }`}>
                                         {user.role === 'superadmin' ? 'SUPER ADMIN' :
-                                            user.role === 'admin' ? 'ADMINISTRATION' : 'USER'}
+                                            user.role === 'community_admin' ? 'ADMINISTRATION' : 'USER'}
                                     </span>
                                 </div>
                             </Link>

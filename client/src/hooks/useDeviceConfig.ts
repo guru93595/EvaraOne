@@ -17,6 +17,7 @@ export interface TankConfig {
     length_m?: number;
     breadth_m?: number;
     radius_m?: number;
+    dead_band_m?: number;
     capacity_liters?: number | null;
     water_level_field?: string;
     temperature_field?: string;

@@ -110,7 +110,7 @@ const CustomerDetails = () => {
         </p>
         <button
           onClick={() => navigate("/superadmin/customers")}
-          className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-slate-200"
+          className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-200"
         >
           Return to Directory
         </button>
@@ -133,19 +133,10 @@ const CustomerDetails = () => {
         </span>
         <ChevronRight size={14} className="shrink-0" />
         <span
-          onClick={() => navigate(`/superadmin/zones/${zone?.id}`)}
-          className="hover:text-blue-600 cursor-pointer truncate max-w-[100px]"
+          onClick={() => navigate(`/superadmin/zones/${zone?.id}/customers`)}
+          className="hover:text-blue-600 cursor-pointer truncate max-w-[150px]"
         >
           {zone?.name || zone?.zoneName || "Zone"}
-        </span>
-        <ChevronRight size={14} className="shrink-0" />
-        <span
-          onClick={() =>
-            navigate(`/superadmin/communities/${shadowCommunity?.id}`)
-          }
-          className="hover:text-blue-600 cursor-pointer truncate max-w-[100px]"
-        >
-          {shadowCommunity?.name || "Community"}
         </span>
         <ChevronRight size={14} className="shrink-0" />
         <span className="font-bold text-slate-800 truncate">
@@ -161,9 +152,7 @@ const CustomerDetails = () => {
           <p className="text-slate-500">Customer Profile & Device Management</p>
         </div>
         <button
-          onClick={() =>
-            navigate(`/superadmin/communities/${shadowCommunity?.id}`)
-          }
+          onClick={() => navigate(`/superadmin/zones/${zone?.id}/customers`)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-white/30 text-sm font-medium"
         >
           <ArrowLeft size={16} /> Back
@@ -213,12 +202,12 @@ const CustomerDetails = () => {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-bold uppercase">
-                    Community
+                    Assigned Zone
                   </p>
                   <p className="text-slate-800 font-medium">
-                    {shadowCommunity?.name || "N/A"}
+                    {zone?.name || zone?.zoneName || "N/A"}
                   </p>
-                  <p className="text-xs text-slate-400">{zone?.name || ""}</p>
+                  <p className="text-xs text-slate-400">{zone?.state || ""}</p>
                 </div>
               </div>
 
@@ -406,10 +395,9 @@ const CustomerDetails = () => {
               ? {
                   ...editingDevice,
                   name: editingDevice.label || editingDevice.displayName,
-                  customer_id: client?.id,
-                  community_id: shadowCommunity?.id,
-                  regionFilter: zone?.id,
-                  ...(editingDevice.metadata?.thingspeak || {}),
+                   customer_id: client?.id,
+                   regionFilter: zone?.id,
+                   ...(editingDevice.metadata?.thingspeak || {}),
                   ...(editingDevice.metadata?.config_tank || {}),
                   ...(editingDevice.metadata?.config_deep || {}),
                   ...(editingDevice.metadata?.config_flow || {}),

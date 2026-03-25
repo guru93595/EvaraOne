@@ -76,6 +76,14 @@ export function useTelemetryLatest(
         return () => clearInterval(interval);
     }, [enabled]);
 
+    // Trigger status re-calculation when ticker changes
+    useEffect(() => {
+        if (statusTicker > 0 && queryClient.getQueryData(['telemetry', deviceId, 'latest'])) {
+            // Force re-evaluation of online status
+            queryClient.invalidateQueries(['telemetry', deviceId, 'latest'], { refetch: false });
+        }
+    }, [statusTicker, deviceId, queryClient]);
+
     // ─── Realtime WebSocket Integration ─────────────────────────────────────────
     useEffect(() => {
         if (!deviceId || !enabled) return;
@@ -92,9 +100,10 @@ export function useTelemetryLatest(
                     return {
                         ...old,
                         timestamp: payload.timestamp,
-                        data: payload.raw_data || old?.data || {},
+                        data: payload.raw_data || payload.data || old?.data || {},
                         level_percentage: payload.level_percentage ?? old?.level_percentage,
-                        online: true // If we just got a socket event, it's online
+                        total_liters: payload.total_liters ?? old?.total_liters,
+                        online: true
                     };
                 }
                 return old;
@@ -141,9 +150,9 @@ export function useTelemetryLatest(
         },
         enabled,
         refetchOnWindowFocus: false,
-        staleTime: 1000 * 3, // 3 seconds
+        staleTime: 1000 * 30, // 30 seconds for consistent freshness
         gcTime: 5 * 60_000,
-        refetchInterval: 5_000, // Poll every 5s as requested
+        refetchInterval: 300000, // Reduced from 5s to 5m
         retry: 3,
         retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 30_000),
     });
@@ -151,9 +160,7 @@ export function useTelemetryLatest(
     const telemetryData = data ?? null;
 
     // Enforce strict 30-min (1800s) timestamp rule universally for real-time accuracy.
-    // We ignore the backend `online` flag as it may use a different heartbeat rule.
-    // statusTicker is included in dependencies if this were a memo, but here it forces the re-eval on every render.
-    const onlineStatus: 'Online' | 'Offline' = computeOnlineStatus(telemetryData?.timestamp ?? null, deviceId ?? undefined);
+    const onlineStatus: 'Online' | 'Offline' = computeOnlineStatus(telemetryData?.timestamp ?? null);
 
     return { telemetryData, onlineStatus, isLoading, isError, refetch };
 }

@@ -11,8 +11,20 @@ import { useNodes } from "../hooks/useNodes";
 import { useToast } from "../components/ToastProvider";
 import { getDeviceAnalyticsRoute } from "../utils/deviceRouting";
 import { socket } from "../services/api";
-import { computeOnlineStatus } from "../utils/telemetryPipeline";
-import type { NodeCategory, AnalyticsType } from "../types/database";
+import { computeDeviceStatus } from "../services/DeviceService";
+import { getTankLevel } from "../utils/telemetryPipeline";
+
+type NodeCategory = 
+  | 'OHT' 
+  | 'Sump' 
+  | 'Borewell' 
+  | 'EvaraTank' 
+  | 'EvaraDeep' 
+  | 'EvaraFlow' 
+  | 'GovtBorewell' 
+  | 'PumpHouse' 
+  | 'FlowMeter';
+type AnalyticsType = 'EvaraTank' | 'EvaraFlow' | 'EvaraDeep';
 
 // ─── Category config ─────────────────────────────────────────────────────────
 
@@ -75,6 +87,30 @@ export const CATEGORY_CONFIG: Record<
     badge: "bg-cyan-100 text-cyan-700",
     dot: "bg-cyan-500",
   },
+  EvaraTank: {
+    label: "EvaraTank",
+    icon: <img src="/tank.png" className="w-8 h-8 object-contain" />,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    badge: "bg-blue-100 text-blue-700",
+    dot: "bg-blue-500",
+  },
+  EvaraDeep: {
+    label: "EvaraDeep",
+    icon: <img src="/borewell.png" className="w-8 h-8 object-contain" />,
+    color: "text-amber-600",
+    bg: "bg-amber-50",
+    badge: "bg-amber-100 text-amber-700",
+    dot: "bg-amber-500",
+  },
+  EvaraFlow: {
+    label: "EvaraFlow",
+    icon: <img src="/meter.png" className="w-8 h-8 object-contain" />,
+    color: "text-cyan-600",
+    bg: "bg-cyan-50",
+    badge: "bg-cyan-100 text-cyan-700",
+    dot: "bg-cyan-500",
+  },
 };
 
 const ANALYTICS_CONFIG: Record<
@@ -122,6 +158,124 @@ const ANALYTICS_CONFIG: Record<
   },
 };
 
+const NodeCardItem = ({ node, realtimeStatuses }: { node: any, realtimeStatuses: any }) => {
+  const cfg = CATEGORY_CONFIG[(node.category as NodeCategory) || "OHT"] || CATEGORY_CONFIG["OHT"];
+  
+  // DRIVER FIX: Compute status in real-time using the same logic as Analytics pages
+  const realtimeSnapshot = realtimeStatuses[node.id];
+  const effectiveLastSeen = realtimeSnapshot?.timestamp || realtimeSnapshot?.created_at || node.last_seen || node.last_online_at || node.updated_at || null;
+  const currentStatus = computeDeviceStatus(effectiveLastSeen);
+  const isOnline = currentStatus === "Online";
+  const isTank = ["evaratank", "EvaraTank", "tank", "sump", "OHT", "Sump"].includes((node.category || node.asset_type || "").toString());
+
+  const lastTel = realtimeSnapshot || node.last_telemetry || {};
+  
+  // DRIVER FIX: Use the backend's authoritative smoothed level for absolute parity. 
+  // This eliminates divergence between Map, List, and Analytics.
+  const pct = lastTel.level_percentage ?? getTankLevel(node, lastTel);
+
+  const cardBgStyle = isOnline 
+    ? { background: "linear-gradient(135deg, #f0fce8 0%, #e0f8de 50%, #cbf2ce 100%)" }
+    : { background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)" };
+
+  return (
+    <Link
+      to={getDeviceAnalyticsRoute({
+        id: node.id,
+        hardwareId: node.hardwareId || node.id,
+        analytics_template: node.analytics_template || undefined,
+        device_type: node.category || undefined,
+        asset_type: node.asset_type || undefined,
+      })}
+      className="group rounded-[24px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col relative mx-auto w-full border border-black/5"
+      style={cardBgStyle}
+    >
+      <div className="p-5 flex flex-col flex-1 relative z-10 w-full min-h-[160px] gap-[18px]">
+        {/* Top: Icon + Title + Status */}
+        <div className="flex items-start justify-between w-full">
+          <div className="flex items-start gap-3 w-full pr-2">
+            <div className="w-[46px] h-[46px] bg-white rounded-[14px] shadow-sm flex items-center justify-center shrink-0">
+              {cfg.icon}
+            </div>
+            <div className="flex flex-col justify-center gap-[5px] overflow-hidden pt-0.5">
+              <h3 className="font-[900] text-[#0066cc] text-[17px] leading-none truncate w-full">
+                {node.label}
+              </h3>
+              <span className="w-fit bg-[#e2eaff] text-[#3451b2] text-[8.5px] font-[900] px-2.5 py-[3px] rounded-lg uppercase tracking-wider leading-none shadow-sm whitespace-nowrap">
+                {cfg.label}
+              </span>
+            </div>
+          </div>
+          
+          <span
+            className={clsx(
+              "flex items-center gap-1.5 text-[10px] font-[900] uppercase tracking-wider px-2.5 py-1.5 rounded-[10px] shadow-sm min-w-max shrink-0 ml-1",
+              isOnline ? "bg-[#eafdec] text-[#008f39] border border-[#d1ebd4]" : "bg-[#fdeded] text-red-600 border border-[#fad1d1]",
+            )}
+          >
+            <span
+              className={clsx(
+                "w-1.5 h-1.5 rounded-full",
+                isOnline ? "bg-[#008f39]" : "bg-red-500"
+              )}
+            />
+            {currentStatus}
+          </span>
+        </div>
+
+        {/* Middle: Progress / Data */}
+        {isTank ? (
+          <div className="flex flex-col justify-center flex-1 px-1 mt-2">
+            <div className="flex justify-between items-end mb-[10px]">
+              <span className="text-[11.5px] font-[900] text-[#6b8a70] uppercase tracking-wider">Water Level</span>
+              <span className="text-[22px] font-[900] text-[#1e3a24] leading-none tracking-tight">{pct.toFixed(1)}%</span>
+            </div>
+            <div className="h-[9px] bg-[#d0eac8] rounded-full overflow-hidden flex relative shadow-inner">
+              <div
+                className="h-full rounded-full transition-all duration-1000 ease-out relative shadow-[inset_0_-2px_4px_rgba(0,0,0,0.1)]"
+                style={{
+                  width: `${Math.min(100, Math.max(5, pct))}%`,
+                  background: pct > 20 ? "linear-gradient(90deg, #22c55e 0%, #4ade80 100%)" : "linear-gradient(90deg, #f87171 0%, #ef4444 100%)",
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1"></div>
+        )}
+
+        {/* Bottom: Location + Capacity */}
+        <div className="mt-auto flex items-center justify-between pt-3 px-1">
+          <div className="flex items-center gap-1.5 text-[12px] font-[800] text-[#789682] truncate pr-2">
+            <MapPin size={14} className="shrink-0 text-[#83a48e]" />
+            <span className="truncate uppercase text-[#719379]">{node.location_name || "Unknown"}</span>
+          </div>
+          <span className="text-[11.5px] font-[900] text-[#5e6e82] bg-white/70 px-2.5 py-1 rounded-[8px] border border-white/50 shadow-sm whitespace-nowrap">
+            {node.capacity || "N/A"}
+          </span>
+        </div>
+      </div>
+
+      {/* Footer Gel/Liquid Glass Button */}
+      <div
+        className="relative overflow-hidden px-5 py-[13px] text-center text-[11px] font-[900] tracking-[0.2em] transition-all uppercase w-full flex items-center justify-center gap-1 group-hover:brightness-110"
+        style={{
+          background: 'linear-gradient(to bottom, #4B8BF5, #2B66E9)',
+          color: '#FFFFFF',
+          borderTop: '1px solid rgba(255,255,255,0.3)',
+          boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.6), inset 0 -1px 2px rgba(15,48,150,0.3), 0 -2px 10px rgba(75,139,245,0.2)',
+        }}
+      >
+        <div className="absolute top-0 left-0 w-full h-[45%] bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+        
+        <span className="relative z-10 drop-shadow-sm">VIEW MORE</span>
+        <span className="text-[14px] relative z-10 drop-shadow-sm transform transition-transform group-hover:translate-x-1">→</span>
+      </div>
+    </Link>
+  );
+};
+
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const AllNodes = () => {
@@ -138,18 +292,22 @@ const AllNodes = () => {
 
   // Track shown errors to prevent notification spam
   const shownErrorsRef = useRef<Set<string>>(new Set());
-  const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
+  const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, any>>({});
 
-  // SaaS Architecture: Real-time Status Override
+  // SaaS Architecture: Real-time Telemetry Sync for ALL devices
   useEffect(() => {
     const handleUpdate = (data: any) => {
         const id = data.device_id || data.node_id;
         if (!id) return;
-        const status = computeOnlineStatus(data.timestamp || data.created_at || data.last_seen, id);
-        setRealtimeStatuses(prev => ({ ...prev, [id]: status }));
+        setRealtimeStatuses(prev => ({ ...prev, [id]: data }));
     };
+    // Listen to both targeted room events AND global broadcast
     socket.on("telemetry_update", handleUpdate);
-    return () => { socket.off("telemetry_update", handleUpdate); };
+    socket.on("telemetry_broadcast", handleUpdate);
+    return () => {
+      socket.off("telemetry_update", handleUpdate);
+      socket.off("telemetry_broadcast", handleUpdate);
+    };
   }, []);
 
   // Show toast notification ONCE per unique error - prevents flooding
@@ -163,7 +321,11 @@ const AllNodes = () => {
   const filtered = useMemo(() => nodes.filter((n) => {
     const matchAnalytics =
       analyticsFilter === "all" || n.analytics_template === analyticsFilter;
-    const currentStatus = realtimeStatuses[n.id] || n.status;
+    
+    // Consistent status calculation for filtering
+    const snapshot = realtimeStatuses[n.id] || n || {};
+    const effectiveLastSeen = snapshot.timestamp || snapshot.created_at || n.last_seen || n.last_online_at || n.updated_at || null;
+    const currentStatus = computeDeviceStatus(effectiveLastSeen);
     const matchStatus = statusFilter === "all" || currentStatus === statusFilter;
     const q = search.toLowerCase();
     const matchSearch =
@@ -175,8 +337,13 @@ const AllNodes = () => {
   }), [nodes, analyticsFilter, statusFilter, search]);
 
   const { onlineCount, offlineCount } = useMemo(() => {
-    const online = nodes.filter(n => (realtimeStatuses[n.id] || n.status) === "Online").length;
-    const offline = nodes.filter(n => (realtimeStatuses[n.id] || n.status) === "Offline").length;
+    const statuses = nodes.map(n => {
+      const snap = realtimeStatuses[n.id];
+      const ts = snap?.timestamp || snap?.created_at || n.last_seen || n.last_online_at || n.updated_at || null;
+      return computeDeviceStatus(ts);
+    });
+    const online = statuses.filter(s => s === "Online").length;
+    const offline = statuses.filter(s => s === "Offline").length;
     return { onlineCount: online, offlineCount: offline };
   }, [nodes, realtimeStatuses]);
 
@@ -191,7 +358,7 @@ const AllNodes = () => {
       ></div>
 
       {/* ── Top Header Bar ── */}
-      <div className="px-8 py-6 relative z-10">
+      <div className="px-8 pt-3 pb-2 relative z-10">
         <div className="max-w-screen-2xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-[28px] font-[800] tracking-tight text-[#004ba0] leading-none mb-1.5">
@@ -228,7 +395,7 @@ const AllNodes = () => {
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto px-8 py-4 space-y-6 relative z-10 w-full">
+      <div className="max-w-screen-2xl mx-auto px-8 pb-4 pt-1 space-y-6 relative z-10 w-full">
         {/* ── Search + Status filter ── */}
         <div className="flex flex-col lg:flex-row items-center justify-start gap-4 w-full">
           <div className="relative w-full max-w-md group">
@@ -349,12 +516,6 @@ const AllNodes = () => {
           })}
         </div>
 
-        {/* ── Results count ── */}
-        <div className="w-full flex justify-start">
-          <p className="text-[10px] text-blue-700 font-[800] btn-liquid-glass btn-liquid-glass-slate px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
-            Displaying {filtered.length} nodes
-          </p>
-        </div>
 
         {/* ── Grid ── */}
         {loading ? (
@@ -365,101 +526,10 @@ const AllNodes = () => {
             </p>
           </div>
         ) : filtered.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 w-full max-w-7xl">
-            {filtered.map((node) => {
-              const cfg =
-                CATEGORY_CONFIG[(node.category as NodeCategory) || "OHT"] ||
-                CATEGORY_CONFIG["OHT"];
-              const currentStatus = realtimeStatuses[node.id] || node.status;
-              const isOnline = currentStatus === "Online";
-              return (
-                <Link
-                  key={node.node_key || node.id}
-                  to={getDeviceAnalyticsRoute({
-                    id: node.id,
-                    hardwareId: node.hardwareId || node.id,
-                    analytics_template: node.analytics_template || undefined,
-                    device_type: node.category || undefined,
-                    asset_type: node.asset_type || undefined,
-                  })}
-                  className="group bg-white/70 backdrop-blur-md rounded-[24px] border border-white/60 shadow-sm hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden flex flex-col ring-1 ring-white/20"
-                >
-                  <div className="p-5 flex flex-col flex-1">
-                    {/* Icon + status */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div
-                        className={clsx(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-colors",
-                          cfg.bg,
-                          cfg.color,
-                          "group-hover:scale-110 transition-transform duration-200",
-                        )}
-                      >
-                        {cfg.icon}
-                      </div>
-                      <span
-                        className={clsx(
-                          "flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full",
-                          isOnline
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-600",
-                        )}
-                      >
-                        <span
-                          className={clsx(
-                            "w-1.5 h-1.5 rounded-full",
-                            isOnline
-                              ? "bg-green-500 animate-pulse"
-                              : "bg-red-400",
-                          )}
-                        />
-                        {currentStatus}
-                      </span>
-                    </div>
-
-                    {/* Name */}
-                    <h3 className="font-[800] text-[#004ba0] text-[17px] leading-tight mb-2 group-hover:text-blue-500 transition-colors">
-                      {node.label}
-                    </h3>
-
-                    {/* Category badge */}
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      <span
-                        className={clsx(
-                          "text-[11px] font-[800] px-3 py-1 rounded-full uppercase tracking-tight",
-                          cfg.badge,
-                        )}
-                      >
-                        {cfg.label}
-                      </span>
-                    </div>
-
-                    {/* Location + capacity */}
-                    <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                        <MapPin size={12} />
-                        <span className="font-medium">
-                          {node.location_name}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                        {node.capacity}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* View Analytics footer */}
-                  <div
-                    className={clsx(
-                      "px-5 py-3.5 text-center text-[10px] font-[800] tracking-[0.15em] transition-all border-t border-white/40 uppercase",
-                      "bg-white/40 text-slate-400 group-hover:bg-[#004ba0] group-hover:text-white group-hover:tracking-[0.25em] group-hover:font-[900]",
-                    )}
-                  >
-                    Explore Intelligence →
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 w-full max-w-7xl">
+            {filtered.map((node) => (
+               <NodeCardItem key={node.node_key || node.id} node={node} realtimeStatuses={realtimeStatuses} />
+            ))}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-24 text-center">

@@ -6,7 +6,6 @@ export interface AdminStats {
   online_nodes: number;
   alerts_active: number;
   total_customers: number;
-  total_communities: number;
   total_zones: number;
   system_health: number;
 }
@@ -134,10 +133,12 @@ class AdminService {
   /**
    * Get customers.
    */
-  async getCustomers(communityId?: string): Promise<Customer[]> {
-    const response = await api.get("/admin/customers", {
-      params: { community_id: communityId },
-    });
+  async getCustomers(communityId?: string, zoneId?: string): Promise<Customer[]> {
+    const params: any = {};
+    if (communityId && communityId.trim() !== '') params.community_id = communityId;
+    if (zoneId && zoneId.trim() !== '') params.zone_id = zoneId;
+
+    const response = await api.get("/admin/customers", { params });
     return response.data;
   }
 
@@ -170,12 +171,14 @@ class AdminService {
   }
 
   /**
-   * Get clients of a community.
+   * Get clients of a community OR zone.
    */
-  async getClients(communityId: string): Promise<Customer[]> {
-    const response = await api.get("/admin/customers", {
-      params: { community_id: communityId },
-    });
+  async getClients(communityId?: string, zoneId?: string): Promise<Customer[]> {
+    const params: any = {};
+    if (communityId && communityId.trim() !== '') params.community_id = communityId;
+    if (zoneId && zoneId.trim() !== '') params.zone_id = zoneId;
+
+    const response = await api.get("/admin/customers", { params });
     return response.data;
   }
 

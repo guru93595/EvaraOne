@@ -11,20 +11,18 @@ const AdminCustomers = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [clients, setClients] = useState<any[]>([]);
-  const [communities, setCommunities] = useState<any[]>([]);
+
   const [zones, setZones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchClients = async () => {
     try {
-      const [custData, commData, zoneData] = await Promise.all([
+      const [custData, zoneData] = await Promise.all([
         adminService.getCustomers(),
-        adminService.getCommunities(),
         adminService.getRegions(),
       ]);
       setClients(Array.isArray(custData) ? custData : []);
-      setCommunities(Array.isArray(commData) ? commData : []);
       setZones(Array.isArray(zoneData) ? zoneData : []);
     } catch (error) {
       console.error("Failed to fetch clients or hierarchy:", error);
@@ -38,11 +36,7 @@ const AdminCustomers = () => {
     fetchClients();
   }, []);
 
-  // Create Lookup Maps for performance
-  const communityMap = useMemo(
-    () => Object.fromEntries(communities.map((c) => [c.id, c])),
-    [communities],
-  );
+
 
   const zoneMap = useMemo(
     () => Object.fromEntries(zones.map((z) => [z.id, z])),
@@ -60,7 +54,7 @@ const AdminCustomers = () => {
 
 
   return (
-    <div className="glass-dashboard min-h-screen p-8">
+    <div className="min-h-screen p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-[24px]">
         <div>
           <h2 className="text-[28px] font-[600] tracking-[-0.5px] text-[#1F2937] leading-tight">
@@ -91,7 +85,7 @@ const AdminCustomers = () => {
           {user?.role === "superadmin" && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#1F2937] text-white text-[13px] font-[600] rounded-[12px] hover:bg-[#111827] shadow-sm transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-[12px] bg-[#3A7AFE] text-white font-[700] text-[13px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Plus size={16} /> Add Customer
             </button>
@@ -99,8 +93,8 @@ const AdminCustomers = () => {
         </div>
       </div>
 
-      <div className="apple-glass-card">
-        <div className="apple-glass-content">
+      <div className="bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 overflow-hidden shadow-xl">
+        <div className="p-6">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-[rgba(255,255,255,0.1)] text-[11px] font-[600] text-[#1F2937] opacity-70 uppercase tracking-wider">
@@ -137,18 +131,7 @@ const AdminCustomers = () => {
                       <MapPin size={14} className="text-[#1F2937] opacity-50" />
                       <div>
                         <span className="text-[#1F2937] font-[500]">
-                          {communityMap[client.community_id]?.name ||
-                            "Unknown Community"}
-                        </span>
-                        <span className="text-[#1F2937] opacity-40 mx-1">
-                          /
-                        </span>
-                        <span className="text-[#1F2937] opacity-60 text-[12px]">
-                          {(() => {
-                            const comm = communityMap[client.community_id];
-                            const zone = zoneMap[comm?.zone_id];
-                            return zone?.zoneName || "No Zone";
-                          })()}
+                          {zoneMap[client.zone_id || client.regionFilter]?.zoneName || "No Zone Assigned"}
                         </span>
                       </div>
                     </div>

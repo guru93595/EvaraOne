@@ -54,6 +54,8 @@ export interface Customer {
   phone_number?: string;
   role: 'customer' | 'admin' | 'superadmin';
   community_id?: string;
+  zone_id?: string;
+  regionFilter?: string;
   created_at?: string;
   updated_at?: string;
 
@@ -72,6 +74,8 @@ export interface CustomerCreate {
   phone_number?: string;
   role?: 'customer' | 'admin' | 'superadmin';
   community_id?: string;
+  zone_id?: string;
+  regionFilter?: string;
 }
 
 export interface CustomerUpdate extends Partial<CustomerCreate> {

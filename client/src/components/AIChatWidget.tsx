@@ -113,7 +113,7 @@ export default function AIChatWidget() {
             {/* Toggle Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`p-4 rounded-full shadow-[0_8px_30px_rgba(31,41,55,0.2)] transition-all duration-300 hover:scale-105 ${isOpen ? 'bg-[#1F2937] text-white rotate-90 scale-0 opacity-0 hidden' : 'bg-[#1F2937] text-white flex items-center justify-center hover:bg-[#111827]'}`}
+                className={`p-4 rounded-full shadow-[0_8px_30px_rgba(58,122,254,0.2)] transition-all duration-300 hover:scale-105 ${isOpen ? 'bg-[#3A7AFE] text-white rotate-90 scale-0 opacity-0 hidden' : 'bg-[#3A7AFE] text-white flex items-center justify-center hover:bg-[#2563EB]'}`}
             >
                 <MessageSquare className="w-6 h-6" />
             </button>

@@ -121,7 +121,7 @@ body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background-image: url('/background.png') !important;
+  background-image: url('/background1.png') !important;
   background-size: cover !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
@@ -469,7 +469,6 @@ body {
 .apple-glass-content {
   position: relative;
   z-index: 1;
-  padding: 24px;
 }
 
 /* Hover Physics */
@@ -574,9 +573,15 @@ body {
 }
 
 .btn-liquid-glass-slate {
-  background: rgba(30, 41, 59, 0.8) !important;
-  border: 1.5px solid rgba(30, 41, 59, 1) !important;
+  background: rgba(10, 132, 255, 0.8) !important;
+  border-color: rgba(10, 132, 255, 0.4) !important;
   color: white !important;
+}
+
+.btn-liquid-glass-slate:hover {
+  background: rgba(10, 132, 255, 1) !important;
+  border-color: rgba(10, 132, 255, 0.6) !important;
+  transform: translateY(-1px);
 }
 
 .btn-liquid-glass-indigo {

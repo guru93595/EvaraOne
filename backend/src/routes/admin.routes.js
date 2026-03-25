@@ -2,7 +2,6 @@ const router = require("express").Router();
 const {
     createZone, getZones, getZoneById, updateZone, deleteZone,
     createCustomer, getCustomers, getCustomerById, updateCustomer, deleteCustomer,
-    createCommunity, getCommunities, getCommunityById, updateCommunity, deleteCommunity,
     createNode, getNodes, updateNode, deleteNode,
     getDashboardSummary, getHierarchy, getAuditLogs, getDashboardInit
 } = require("../controllers/admin.controller.js");
@@ -11,7 +10,6 @@ const validateRequest = require("../middleware/validateRequest.js");
 const {
   createZoneSchema,
   createCustomerSchema,
-  createCommunitySchema,
   createNodeSchema,
   updateNodeSchema
 } = require("../schemas/index.schema.js");
@@ -31,13 +29,6 @@ router.get("/customers", getCustomers);
 router.get("/customers/:id", getCustomerById);
 router.put("/customers/:id", validateRequest(createCustomerSchema), auditLog("UPDATE_CUSTOMER"), updateCustomer);
 router.delete("/customers/:id", auditLog("DELETE_CUSTOMER"), deleteCustomer);
-
-// Communities
-router.post("/communities", validateRequest(createCommunitySchema), auditLog("CREATE_COMMUNITY"), createCommunity);
-router.get("/communities", getCommunities);
-router.get("/communities/:id", getCommunityById);
-router.put("/communities/:id", validateRequest(createCommunitySchema), auditLog("UPDATE_COMMUNITY"), updateCommunity);
-router.delete("/communities/:id", auditLog("DELETE_COMMUNITY"), deleteCommunity);
 
 // Nodes
 router.post("/nodes", validateRequest(createNodeSchema), auditLog("CREATE_NODE"), createNode);

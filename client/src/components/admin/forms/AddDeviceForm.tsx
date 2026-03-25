@@ -11,7 +11,6 @@ import {
   Cpu,
   Wifi,
   MapPin,
-  Building2,
   Key,
   Gauge,
   Droplets,
@@ -23,7 +22,6 @@ import {
   ChevronLeft,
   Zap,
   Info,
-  Radio,
   User,
   Navigation2,
   Ruler,
@@ -36,11 +34,13 @@ import { MapPicker } from "../MapPicker";
 
 import { adminService } from "../../../services/admin";
 import { useZones } from "../../../hooks/useZones";
-import { useCommunities } from "../../../hooks/useCommunities";
 import { useToast } from "../../ToastProvider";
 import { useAuth } from "../../../context/AuthContext";
 import { deviceSchema, type DeviceInput } from "../../../schemas";
 import { FormField } from "../../forms/FormField";
+import { useThingSpeakFieldSelector } from "../../../hooks/useThingSpeakFieldSelector";
+import { ThingSpeakFieldSelector } from "../../forms/ThingSpeakFieldSelector";
+import { TankDimensionsCalculator } from "../../forms/TankDimensionsCalculator";
 
 interface Props {
   onSubmit: (data: any) => void;
@@ -93,6 +93,8 @@ const STEPS = [
 ];
 
 export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
+  // ── ThingSpeak field selector hook ────────────────────────────────────────
+  const tsSelector = useThingSpeakFieldSelector();
   const { showToast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -141,18 +143,12 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
   const watchType = watch("device_type");
   const watchTemplate = watch("analytics_template");
   const watchZoneId = watch("zone_id" as any);
-  const watchCommunity = watch("community_id");
   const watchLat = watch("latitude");
   const watchLng = watch("longitude");
-
-  const { communities, isLoading: loadingCommunities } = useCommunities(
-    watchZoneId || undefined,
-  );
-
   const { data: availableClients = [], isLoading: loadingClients } = useQuery({
-    queryKey: ["clients_by_community", watchCommunity],
-    queryFn: () => adminService.getClients(watchCommunity as string),
-    enabled: !!watchCommunity,
+    queryKey: ["clients_by_zone", watchZoneId],
+    queryFn: () => adminService.getClients(undefined, watchZoneId as string),
+    enabled: !!watchZoneId,
   });
 
   useEffect(() => {
@@ -181,7 +177,7 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
       "name",
       "node_key",
       "device_type",
-      "community_id",
+      "zone_id",
       "customer_id",
     ] as any);
     if (ok) setStep(2);
@@ -228,7 +224,6 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
                 : "OverheadTank",
 
         zoneId: watchZoneId || "",
-        communityId: data.community_id,
         customerId: data.customer_id,
 
         latitude: Number(data.latitude),
@@ -280,19 +275,13 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
   };
 
   const inp = (error?: any) =>
-    `w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none transition-all duration-150 ${error ? "border-red-300 bg-red-50 focus:border-red-400 focus:ring-2 focus:ring-red-100" : "border-slate-200 bg-white/60 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"}`;
+    `w-full px-3.5 py-2.5 h-10 min-h-[40px] rounded-xl border text-sm outline-none transition-all duration-150 ${error ? "border-red-300 bg-red-50 focus:border-red-400 focus:ring-2 focus:ring-red-100" : "border-slate-200 bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"}`;
 
-  const fieldSelect = (n: number) =>
-    Array.from({ length: n }, (_, i) => i + 1).map((idx) => (
-      <option key={idx} value={`field${idx}`}>
-        Field {idx}
-      </option>
-    ));
 
   return (
     <div
       className="flex flex-col"
-      style={{ height: "72vh", maxHeight: "680px" }}
+      style={{ minHeight: "520px", maxHeight: "78vh" }}
     >
       <Modal
         isOpen={showMapPicker}
@@ -341,7 +330,7 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
       <form
         id="device-form"
         onSubmit={handleSubmit(onFormSubmit)}
-        className="flex-1 overflow-y-auto pr-1 custom-scrollbar"
+        className="flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-0"
       >
         <AnimatePresence mode="wait">
           {step === 1 && (
@@ -465,36 +454,17 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
                     />
                   </FormField>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <FormField label="Zone Filter" icon={MapPin}>
                     <select
-                      {...register("regionFilter" as any)}
+                      {...register("zone_id" as any)}
                       className={inp()}
                       disabled={loadingRegions}
                     >
-                      <option value="">All Zones</option>
+                      <option value="">Select Zone...</option>
                       {sortedRegions.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.zoneName}
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
-                  <FormField
-                    label="Assign Community"
-                    required
-                    icon={Building2}
-                    error={errors.community_id?.message}
-                  >
-                    <select
-                      {...register("community_id")}
-                      className={inp(errors.community_id)}
-                      disabled={loadingCommunities}
-                    >
-                      <option value="">Select community...</option>
-                      {communities?.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
                         </option>
                       ))}
                     </select>
@@ -508,7 +478,7 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
                     <select
                       {...register("customer_id")}
                       className={inp(errors.customer_id)}
-                      disabled={!watchCommunity || loadingClients}
+                      disabled={!watchZoneId || loadingClients}
                     >
                       <option value="">Select client...</option>
                       {availableClients?.map((c: any) => (
@@ -531,90 +501,37 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
               exit={{ opacity: 0, x: -16 }}
               className="space-y-4"
             >
-              {/* ThingSpeak */}
+              {/* ThingSpeak — dynamic field selector */}
               <div className="p-4 rounded-2xl bg-cyan-50/40 border border-cyan-100 space-y-3">
                 <div className="flex items-center gap-2 text-[11px] font-[800] text-cyan-700 uppercase tracking-wider">
                   <Wifi size={13} /> ThingSpeak Configuration
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField
-                    label="Channel ID"
-                    required
-                    icon={Radio as any}
-                    error={errors.thingspeak_channel_id?.message}
-                  >
-                    <input
-                      {...register("thingspeak_channel_id")}
-                      placeholder="e.g. 2481920"
-                      className={inp(errors.thingspeak_channel_id)}
-                    />
-                  </FormField>
-                  <FormField
-                    label="Read API Key"
-                    required
-                    icon={Key}
-                    error={errors.thingspeak_read_key?.message}
-                  >
-                    <input
-                      {...register("thingspeak_read_key")}
-                      placeholder="R3AD_K3Y_X1"
-                      className={inp(errors.thingspeak_read_key)}
-                    />
-                  </FormField>
-                </div>
-                {watchTemplate === "EvaraTank" && (
-                  <FormField
-                    label="Water Level Field"
-                    required
-                    icon={Droplets as any}
-                  >
-                    <select
-                      {...register("water_level_field")}
-                      className={inp()}
-                    >
-                      {fieldSelect(8)}
-                    </select>
-                  </FormField>
-                )}
-                {watchTemplate === "EvaraDeep" && (
-                  <FormField
-                    label="Depth Field"
-                    required
-                    icon={FlaskConical as any}
-                  >
-                    <select {...register("depth_field")} className={inp()}>
-                      {fieldSelect(8)}
-                    </select>
-                  </FormField>
-                )}
-                {watchTemplate === "EvaraFlow" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      label="Meter Reading Field (L)"
-                      required
-                      icon={Gauge as any}
-                    >
-                      <select
-                        {...register("meter_reading_field")}
-                        className={inp()}
-                      >
-                        {fieldSelect(8)}
-                      </select>
-                    </FormField>
-                    <FormField
-                      label="Flow Rate Field"
-                      required
-                      icon={Waves as any}
-                    >
-                      <select
-                        {...register("flow_rate_field")}
-                        className={inp()}
-                      >
-                        {fieldSelect(8)}
-                      </select>
-                    </FormField>
-                  </div>
-                )}
+
+                <ThingSpeakFieldSelector
+                  {...tsSelector}
+                  inputClassName={inp()}
+                  addLabel="+ Map another field"
+                  onFieldsChange={(fields) => {
+                    // Sync the first selected field back to the appropriate
+                    // react-hook-form field based on the current device template.
+                    const first = fields[0] ?? '';
+                    const second = fields[1] ?? '';
+
+                    // Always persist channel / key into form so validation works.
+                    setValue('thingspeak_channel_id', tsSelector.channelId, { shouldValidate: true });
+                    setValue('thingspeak_read_key', tsSelector.readApiKey, { shouldValidate: true });
+
+                    if (watchTemplate === 'EvaraTank') {
+                      setValue('water_level_field', first, { shouldValidate: true });
+                    } else if (watchTemplate === 'EvaraDeep') {
+                      setValue('depth_field', first, { shouldValidate: true });
+                    } else if (watchTemplate === 'EvaraFlow') {
+                      setValue('meter_reading_field', first, { shouldValidate: true });
+                      setValue('flow_rate_field', second, { shouldValidate: true });
+                    }
+                  }}
+                />
+
                 <div className="flex gap-2 items-start p-2.5 bg-cyan-50 rounded-xl border border-cyan-100">
                   <Info className="text-cyan-500 mt-0.5 shrink-0" size={12} />
                   <p className="text-[10px] text-cyan-700 leading-relaxed">
@@ -625,50 +542,18 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
                 </div>
               </div>
 
-              {/* EvaraTank dimensions */}
+              {/* EvaraTank dimensions — dynamic calculator */}
               {watchTemplate === "EvaraTank" && (
-                <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 space-y-3">
-                  <div className="flex items-center gap-2 text-[11px] font-[800] text-indigo-700 uppercase tracking-wider">
-                    <Ruler size={13} /> Tank Dimensions
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField label="Length (m)" icon={Ruler as any}>
-                      <input
-                        {...register("length")}
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g. 3.0"
-                        className={inp()}
-                      />
-                    </FormField>
-                    <FormField label="Breadth (m)" icon={Ruler as any}>
-                      <input
-                        {...register("breadth")}
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g. 3.0"
-                        className={inp()}
-                      />
-                    </FormField>
-                    <FormField label="Depth / Height (m)" icon={Ruler as any}>
-                      <input
-                        {...register("max_depth")}
-                        type="number"
-                        step="0.01"
-                        placeholder="e.g. 2.5"
-                        className={inp()}
-                      />
-                    </FormField>
-                    <FormField label="Capacity (Litres)" icon={Droplets as any}>
-                      <input
-                        {...register("capacity")}
-                        type="number"
-                        placeholder="e.g. 10000"
-                        className={inp()}
-                      />
-                    </FormField>
-                  </div>
-                </div>
+                <TankDimensionsCalculator
+                  inputClassName={inp()}
+                  onCalculated={(vals) => {
+                    if (!vals) return;
+                    setValue("length",   String(vals.lengthM),   { shouldValidate: true });
+                    setValue("breadth",  String(vals.breadthM),  { shouldValidate: true });
+                    setValue("max_depth",String(vals.heightM),   { shouldValidate: true });
+                    setValue("capacity", String(vals.capacityL), { shouldValidate: true });
+                  }}
+                />
               )}
 
               {/* EvaraDeep dimensions */}

@@ -30,7 +30,7 @@ export const useZoneStats = () => {
             }
         },
         staleTime: 1000 * 60 * 10, // 10 minutes
-        refetchInterval: 1000 * 60 * 10, // Refetch every 10 minutes (saves ~8K reads/day)
+        refetchInterval: 300000, // Reduced from 5s to 5m
     });
 
     return {

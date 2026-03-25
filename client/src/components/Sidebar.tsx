@@ -28,27 +28,27 @@ const Sidebar = () => {
   return (
     <aside
       className={`
-                relative apple-glass-card border-r border-slate-200 flex flex-col transition-all duration-300
+                relative bg-white/10 backdrop-blur-2xl border-r border-white/20 flex flex-col transition-all duration-300
                 ${collapsed ? "w-20" : "w-64"}
             `}
     >
       {/* Toggle Button */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-8 apple-glass-card border border-slate-200 text-slate-500 rounded-full p-1 hover:text-blue-600 hover:shadow-md transition-all z-50"
+        className="absolute -right-3 top-8 bg-white/40 backdrop-blur-md border border-white/60 text-slate-500 rounded-full p-1 hover:text-blue-600 hover:shadow-lg transition-all z-50 shadow-md"
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
       {/* Logo Area */}
-      <div className="h-16 flex items-center justify-center border-b border-slate-100">
+      <div className="h-16 flex items-center justify-center border-b border-white/10">
         {collapsed ? (
           <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 text-transparent bg-clip-text">
             E
           </span>
         ) : (
           <span className="text-xl font-bold text-slate-800 tracking-widest">
-            EVARA<span className="text-blue-600">ADMIN</span>
+            EVARA<span className="text-[#3A7AFE]">ADMIN</span>
           </span>
         )}
       </div>
@@ -63,8 +63,8 @@ const Sidebar = () => {
                             flex items-center gap-3 px-3 py-3 rounded-xl transition-all group
                             ${
                               isActive(item.path)
-                                ? "bg-blue-50 text-blue-600 shadow-sm"
-                                : "text-slate-500 hover:text-slate-800 hover:bg-white/30"
+                                ? "bg-blue-600/10 text-blue-600 shadow-sm border border-blue-600/20"
+                                : "text-slate-500 hover:text-slate-800 hover:bg-white/20"
                             }
                         `}
           >
@@ -84,7 +84,7 @@ const Sidebar = () => {
       </nav>
 
       {/* User Profile / Logout */}
-      <div className="p-4 border-t border-slate-100">
+      <div className="p-4 border-t border-white/10">
         <button
           onClick={logout}
           className={`

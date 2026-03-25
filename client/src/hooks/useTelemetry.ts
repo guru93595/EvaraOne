@@ -1,9 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { telemetryService, type TelemetryData } from '../services/TelemetryService';
+import { socket } from '../services/api';
 
 export const useTelemetry = (nodeId: string | undefined) => {
+    const queryClient = useQueryClient();
+    
     const {
-        data,
+        data: initialData,
         isLoading: loading,
         error: queryError,
         refetch: refresh
@@ -16,7 +20,46 @@ export const useTelemetry = (nodeId: string | undefined) => {
         enabled: !!nodeId,
     });
 
-    const error = queryError ? (queryError as Error).message : null;
+    const [realtimeData, setRealtimeData] = useState<TelemetryData | null>(null);
 
-    return { data, loading, error, refresh };
+    useEffect(() => {
+        if (!nodeId) return;
+
+        const onUpdate = (payload: any) => {
+            if (payload.device_id === nodeId || payload.id === nodeId) {
+                const mapped: TelemetryData = {
+                    timestamp: payload.timestamp || new Date().toISOString(),
+                    values: payload.raw_data || payload,
+                    deviceId: nodeId,
+                    level_percentage: payload.level_percentage ?? null,
+                    depth_value: payload.distance ?? null,
+                    flow_rate: payload.flow_rate ?? null,
+                    total_liters: payload.volume ?? null,
+                    distance: payload.distance,
+                    waterLevel: payload.level_percentage,
+                };
+                setRealtimeData(mapped);
+                
+                // Also update the react-query cache so other components stay in sync
+                queryClient.setQueryData(['telemetry', nodeId], mapped);
+            }
+        };
+
+        // Listen to both room-based and global broadcast events
+        socket.on('telemetry_update', onUpdate);
+        socket.on('telemetry_broadcast', onUpdate);
+        
+        // If we switch nodes, clear the local state
+        setRealtimeData(null);
+
+        return () => {
+            socket.off('telemetry_update', onUpdate);
+            socket.off('telemetry_broadcast', onUpdate);
+        };
+    }, [nodeId, queryClient]);
+
+    const error = queryError ? (queryError as Error).message : null;
+    const finalData = realtimeData || initialData || null;
+
+    return { data: finalData, loading, error, refresh };
 };

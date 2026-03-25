@@ -151,7 +151,7 @@ export default function SettingsPage() {
           <button
             onClick={handleSave}
             disabled={loading}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg ${saved ? "bg-green-600 hover:bg-green-700" : "bg-slate-900 hover:bg-slate-800"}`}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg ${saved ? "bg-green-600 hover:bg-green-700" : "bg-[#3A7AFE] hover:bg-[#2563EB]"}`}
           >
             {saved ? "Saved!" : loading ? "Saving..." : "Save Changes"}
             {!loading && !saved && <Save className="w-4 h-4" />}

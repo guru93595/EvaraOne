@@ -27,46 +27,46 @@ export const StatusOverlayPanel = ({ visible, devices, categories }: Props) => {
 
     return (
         <div className={clsx(
-            "absolute top-[185px] lg:top-[195px] right-4 z-[400] apple-glass-card/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 w-80 transition-all duration-300 origin-top-right overflow-hidden",
-            visible ? "opacity-100 scale-100 max-h-[420px]" : "opacity-0 scale-95 max-h-0 pointer-events-none"
+            "absolute top-[185px] lg:top-[195px] right-4 z-[400] apple-glass-card/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 w-72 transition-all duration-300 origin-top-right overflow-hidden flex flex-col",
+            visible ? "opacity-100 scale-100 max-h-[calc(100vh-200px)] lg:max-h-[calc(100vh-220px)]" : "opacity-0 scale-95 max-h-0 pointer-events-none"
         )}>
-            <div className="p-3.5">
-                <h3 className="text-sm font-bold text-slate-800 mb-2.5 flex items-center gap-2">
+            <div className="p-5 overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
                     <Activity size={16} className="text-[var(--color-evara-blue)]" /> Status Overview
                 </h3>
 
                 {/* Summary Stats — Compact Row */}
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="bg-green-50/50 rounded-xl p-2 text-center border border-green-100/50">
-                        <div className="text-[9px] font-black text-green-700/60 tracking-wider uppercase mb-0.5">Online</div>
-                        <div className="text-base font-black text-green-600 leading-none">{onlineCount}</div>
+                <div className="grid grid-cols-3 gap-2 mb-5">
+                    <div className="bg-green-50/50 rounded-xl p-2.5 text-center border border-green-100/50">
+                        <div className="text-[9px] font-black text-green-700/60 tracking-wider uppercase mb-1">Online</div>
+                        <div className="text-lg font-black text-green-600 leading-none">{onlineCount}</div>
                     </div>
-                    <div className="bg-red-50/50 rounded-xl p-2 text-center border border-red-100/50">
-                        <div className="text-[9px] font-black text-red-700/60 tracking-wider uppercase mb-0.5">Offline</div>
-                        <div className="text-base font-black text-red-600 leading-none">{offlineCount}</div>
+                    <div className="bg-red-50/50 rounded-xl p-2.5 text-center border border-red-100/50">
+                        <div className="text-[9px] font-black text-red-700/60 tracking-wider uppercase mb-1">Offline</div>
+                        <div className="text-lg font-black text-red-600 leading-none">{offlineCount}</div>
                     </div>
-                    <div className="bg-blue-50/50 rounded-xl p-2 text-center border border-blue-100/50">
-                        <div className="text-[9px] font-black text-blue-700/60 tracking-wider uppercase mb-0.5">Total</div>
-                        <div className="text-base font-black text-blue-600 leading-none">{devices.length}</div>
+                    <div className="bg-blue-50/50 rounded-xl p-2.5 text-center border border-blue-100/50">
+                        <div className="text-[9px] font-black text-blue-700/60 tracking-wider uppercase mb-1">Total</div>
+                        <div className="text-lg font-black text-blue-600 leading-none">{devices.length}</div>
                     </div>
                 </div>
 
-                {/* Asset Breakdown — Tighter Spacing */}
-                <div className="space-y-1.5">
+                {/* Asset Breakdown — Taller Spacing */}
+                <div className="space-y-4">
                     {categories.map((asset, i) => {
                         const working = asset.devices.filter(d => isOnline(d.status)).length;
                         const total = asset.devices.length;
                         const isFullyActive = total > 0 && working === total;
                         
                         return (
-                            <div key={i} className={clsx("rounded-xl px-3 py-2", asset.bg)}>
-                                <div className="flex justify-between items-center mb-1.5">
+                            <div key={i} className={clsx("rounded-xl px-4 py-4", asset.bg)}>
+                                <div className="flex justify-between items-center mb-3">
                                     <div className="flex items-center gap-2 overflow-hidden">
                                         {asset.icon && <span className="shrink-0">{asset.icon}</span>}
-                                        <span className="text-[11px] font-bold text-slate-700 truncate tracking-tight">{asset.name}</span>
+                                        <span className="text-[12px] font-bold text-slate-700 truncate tracking-tight">{asset.name}</span>
                                     </div>
                                     <div className={clsx(
-                                        "px-2 py-0.5 rounded-full text-[9px] font-bold tracking-tight whitespace-nowrap",
+                                        "px-2.5 py-1 rounded-full text-[10px] font-bold tracking-tight whitespace-nowrap",
                                         isFullyActive ? "bg-green-100 text-green-600" : working === 0 && total > 0 ? "bg-red-100 text-red-500" : "bg-orange-100 text-orange-600"
                                     )}>
                                         {working}/{total} Active

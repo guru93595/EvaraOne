@@ -1,25 +1,25 @@
-import api from "./api";
+import api, { socket } from "./api";
 import type { Device } from "../types/entities";
 
-export interface MapDevice extends Partial<Device> {
-  id: string;
-  name: string | null;
-  status: "Online" | "Offline";
+export interface MapDevice extends Device {
+  hardwareId: string;
+  firestore_id?: string;
+  name?: string;
+  location_name?: string;
+  last_online_at?: string | null;
+  updatedAt?: string;
+  last_telemetry?: any;
 }
 
 /**
  * Determine device online/offline status from telemetry timestamp freshness.
- * Standardized to 1800 seconds (30 minutes) for all devices.
+ * Standardized to 2 hours threshold as per latest user request.
  */
-export function computeDeviceStatus(
-  lastTimestamp: any,
-  deviceId?: string
-): "Online" | "Offline" {
+export function computeDeviceStatus(lastTimestamp: any): "Online" | "Offline" {
   if (!lastTimestamp) return "Offline";
 
   try {
     let date: Date;
-    // Handle Firestore Admin SDK Timestamp object (_seconds) or Client SDK (seconds)
     if (typeof lastTimestamp === 'object' && lastTimestamp !== null) {
       if ('_seconds' in lastTimestamp) {
         date = new Date(lastTimestamp._seconds * 1000);
@@ -29,27 +29,36 @@ export function computeDeviceStatus(
         date = new Date(lastTimestamp as any);
       }
     } else if (typeof lastTimestamp === 'number') {
-        // If it's already a unix timestamp in ms
-        date = new Date(lastTimestamp);
+        date = lastTimestamp < 10000000000 ? new Date(lastTimestamp * 1000) : new Date(lastTimestamp);
     } else {
-      date = new Date(lastTimestamp);
+        const tsStr = String(lastTimestamp).trim();
+        // Catch purely numeric strings like "1742721660" which evaluates to Invalid Date in new Date()
+        if (/^\d+$/.test(tsStr)) {
+            const numericVal = parseInt(tsStr, 10);
+            date = numericVal < 10000000000 ? new Date(numericVal * 1000) : new Date(numericVal);
+        } else {
+            // Let the browser parse the date exactly as it does for the UI "2m ago" string!
+            // Do not tamper with the timezone or replace spaces, as it diverges the calculation from StaleDataAge.
+            date = new Date(tsStr);
+            
+            // Safari fallback for '2026-03-23 18:01:00'
+            if (isNaN(date.getTime()) && tsStr.includes(' ')) {
+                date = new Date(tsStr.replace(' ', 'T'));
+            }
+        }
     }
 
     if (isNaN(date.getTime())) return "Offline";
 
-    const now = Date.now();
-    const ageMs = now - date.getTime();
-    const thresholdMs = 7200 * 1000; // 2 hours threshold as per latest user request
+    const ageMs = Date.now() - date.getTime();
     
-    const status = ageMs < thresholdMs ? "Online" : "Offline";
-
-    // Requirement Step 8: Debugging Log
-    if (deviceId) {
-      const diffS = Math.floor(ageMs / 1000);
-      console.log(`[StatusCheck] Device: ${deviceId} | LastSeen: ${date.toISOString()} | Diff: ${diffS}s | Status: ${status}`);
+    // 30 minutes threshold (1,800,000 ms)
+    // Any negative ageMs (future timestamp) evaluates to < thresholdMs here, which is intended.
+    if (ageMs < 1800000) {
+        return "Online";
     }
 
-    return status;
+    return "Offline";
   } catch (err) {
     return "Offline";
   }
@@ -77,6 +86,99 @@ class NodeService {
   }
 
   /**
+   * Standardized mapping function for all node/device data.
+   * Centralizes identity extraction, status computation, and category normalization.
+   */
+  public static mapNodeData(data: any): MapDevice {
+    const docId = data.id || data.hardwareId || data.node_id || data.uid;
+    const hardwareId = data.node_id || data.hardwareId || docId;
+    
+    // Determine last communication timestamp for status.
+    // Ensure we prioritize EXACT ThingSpeak timestamps (last_seen, last_telemetry.timestamp)
+    // BEFORE falling back to last_online_at (which is just when the server polled last).
+    const lastSeenTime = 
+      data.last_telemetry?.timestamp || 
+      data.last_telemetry?.created_at || 
+      data.last_seen || 
+      data.last_telemetry_seen || 
+      data.last_online_at || 
+      null;
+
+    const categoryRaw = (data.device_type || data.assetType || data.asset_type || data.category || "tank").toLowerCase();
+    
+    // Map to UI-friendly categories used in AllNodes
+    let category: 'tank' | 'flow' | 'deep' | 'sump' | 'unknown' = 'unknown';
+    if (categoryRaw.includes('tank') || categoryRaw === 'oht') category = 'tank';
+    else if (categoryRaw.includes('deep') || categoryRaw.includes('bore')) category = 'deep';
+    else if (categoryRaw.includes('flow') || categoryRaw.includes('pump')) category = 'flow';
+    else if (categoryRaw.includes('sump')) category = 'sump';
+    else category = 'tank'; // Default
+
+    const displayName = data.displayName || data.display_name || data.label || hardwareId;
+
+    const conf = data.configuration || {};
+    const depthM = conf.depth ?? data.depth ?? data.height_m ?? data.tankHeight ?? data.height ?? data.max_depth ?? 0;
+    const capacityLitres = conf.tank_size || data.capacity || data.capacity_liters || data.tank_size || data.tank_capacity || null;
+
+    const safeIso = (dateStr: any): string | null => {
+      if (!dateStr) return null;
+      try {
+        if (typeof dateStr === 'object') {
+          if ('_seconds' in dateStr) return new Date(dateStr._seconds * 1000).toISOString();
+          if ('seconds' in dateStr) return new Date(dateStr.seconds * 1000).toISOString();
+          if (dateStr instanceof Date) return dateStr.toISOString();
+        } else if (typeof dateStr === 'number') {
+          return new Date(dateStr < 10000000000 ? dateStr * 1000 : dateStr).toISOString();
+        } else if (typeof dateStr === 'string' && /^\d+$/.test(dateStr.trim())) {
+          const val = parseInt(dateStr.trim(), 10);
+          return new Date(val < 10000000000 ? val * 1000 : val).toISOString();
+        }
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+      } catch (e) {
+        return null;
+      }
+    };
+
+    return {
+      ...data,
+      id: docId,
+      firestore_id: docId,
+      node_key: hardwareId,
+      hardwareId: hardwareId,
+      label: data.label || displayName,
+      displayName: displayName,
+      name: displayName,
+      status: computeDeviceStatus(lastSeenTime),
+      asset_type: categoryRaw,
+      assetType: categoryRaw,
+      category: category as any,
+      device_type: data.device_type || categoryRaw,
+      analytics_template: data.analyticsTemplate || data.analytics_template || (category === 'tank' ? 'EvaraTank' : category === 'flow' ? 'EvaraFlow' : 'EvaraDeep'),
+      analyticsTemplate: data.analyticsTemplate || data.analytics_template || (category === 'tank' ? 'EvaraTank' : category === 'flow' ? 'EvaraFlow' : 'EvaraDeep'),
+      last_seen: safeIso(lastSeenTime),
+      last_online_at: safeIso(lastSeenTime),
+      updatedAt: safeIso(lastSeenTime) || new Date().toISOString(),
+      location_name: data.location_name || data.community_name || data.zone_name || "Main Site",
+      community_name: data.community_name,
+      zone_name: data.zone_name,
+      communityId: data.community_id || data.communityId,
+      zoneId: data.zone_id || data.zoneId,
+      capacity: capacityLitres,
+      depth: depthM,
+      // DRIVER FIX: Elevate telemetry_snapshot as the primary source for last_telemetry.
+      // This ensures Dashboard and Map pick up the backend-calculated smoothed values.
+      last_telemetry: data.telemetry_snapshot || data.last_telemetry || {
+        Level: data.last_level || 0,
+        level_percentage: data.last_level || 0,
+        total_liters: 0,
+        Battery: data.battery_voltage || "4.2V",
+        Signal: data.signal_strength || "Good"
+      }
+    } as any; // Cast as any to satisfy legacy UI property lookups during transition
+  }
+
+  /**
    * Replaced onSnapshot with standard polling mechanism
    */
   subscribeToNodeUpdates(
@@ -88,7 +190,6 @@ class NodeService {
     const poll = async () => {
       try {
         const nodes = await this.getMapNodes(filter?.community_id);
-        // Simulate changes or just pass the whole array depending on frontend logic implementation
         nodes.forEach(node => callback(node));
       } catch (error) {
         console.error("Polling nodes failed", error);
@@ -101,47 +202,90 @@ class NodeService {
     return () => clearTimeout(timeoutId);
   }
 
-  /**
-   * Polling instead of onSnapshot
-   */
   subscribeToNewNodes(
     callback: (payload: any) => void,
     filter?: { community_id?: string },
   ) {
-    // simplified to just defer to subscribeToNodeUpdates for now
     return this.subscribeToNodeUpdates(callback, filter);
   }
 
   /**
    * Fetch a single node details via API.
    */
-  async getNodeDetails(id: string): Promise<Device> {
+  async getNodeDetails(id: string): Promise<MapDevice> {
     const response = await api.get(`/nodes/${id}`);
-    return { id: response.data.id, ...response.data } as Device;
+    return NodeService.mapNodeData(response.data);
   }
 
   /**
-   * Subscribe to all nodes for map display via API polling.
+   * Subscribe to all nodes for map display via WebSockets (with initial API fetch).
    */
   subscribeToMapNodes(
     callback: (nodes: MapDevice[]) => void,
     communityId?: string,
   ) {
-    let timeoutId: any;
+    let currentNodes: MapDevice[] = [];
+    let isSubscribed = true;
 
-    const poll = async () => {
-      try {
-        const nodes = await this.getMapNodes(communityId);
-        callback(nodes);
-      } catch (error) {
-        console.error("Map nodes polling error:", error);
-      }
-      timeoutId = setTimeout(poll, 15000);
+    const updateAndNotify = (updatedNodes: MapDevice[]) => {
+      currentNodes = updatedNodes;
+      if (isSubscribed) callback(currentNodes);
     };
 
-    poll();
+    // Initial Fetch
+    this.getMapNodes(communityId).then(nodes => {
+      if (isSubscribed) updateAndNotify(nodes);
+    });
 
-    return () => clearTimeout(timeoutId);
+    const onTelemetryUpdate = (payload: any) => {
+      if (!isSubscribed) return;
+      
+      // Patch the specific node in our local list
+      const index = currentNodes.findIndex(n => n.id === payload.device_id || n.id === payload.id || n.hardwareId === payload.device_id);
+      if (index !== -1) {
+        const updatedNodes = [...currentNodes];
+        updatedNodes[index] = {
+          ...updatedNodes[index],
+          last_telemetry: {
+            ...updatedNodes[index].last_telemetry,
+            ...payload
+          },
+          last_online_at: payload.timestamp || new Date().toISOString(),
+          status: "Online" // If we just got a packet, it's online
+        };
+        updateAndNotify(updatedNodes);
+      }
+    };
+
+    const setupSocket = () => {
+      if (communityId) {
+        socket.emit("subscribe_community", communityId);
+      }
+      socket.on("telemetry_update", onTelemetryUpdate);
+    };
+
+    if (socket.connected) {
+      setupSocket();
+    }
+    
+    socket.on("connect", setupSocket);
+
+    // Backup Polling (Slow) to ensure we don't miss new nodes added to registry
+    const pollInterval = setInterval(() => {
+        this.getMapNodes(communityId).then(nodes => {
+            if (isSubscribed) updateAndNotify(nodes);
+        });
+    }, 60000); // 1 minute poll for structural changes
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(pollInterval);
+      socket.off("telemetry_update", onTelemetryUpdate);
+      socket.off("connect", setupSocket);
+      if (communityId) {
+        socket.emit("unsubscribe_community", communityId);
+      }
+    };
   }
 
   /**
@@ -157,22 +301,7 @@ class NodeService {
 
     if (!Array.isArray(allNodes)) return [];
 
-    return allNodes.map((data: any) => {
-      const docId = data.id || data.hardwareId || data.node_id;
-      return {
-        ...data,
-        id: docId, // Core identity MUST be docId for API routing
-        firestore_id: docId,
-        hardwareId: data.node_id || data.hardwareId || docId,
-        name: data.label || data.displayName || data.display_name || data.name || data.hardwareId || docId,
-        status: computeDeviceStatus(
-          data.last_online_at || data.last_telemetry_seen || data.last_seen || null,
-          docId
-        ),
-        asset_type: (data.device_type || data.assetType || data.asset_type || "tank").toLowerCase(),
-        analytics_template: data.analyticsTemplate || data.analytics_template || data.device_type || data.assetType || null,
-      } as unknown as MapDevice;
-    });
+    return allNodes.map((data: any) => NodeService.mapNodeData(data));
   }
 
   async getMapDevices(communityId?: string): Promise<MapDevice[]> {

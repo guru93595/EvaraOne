@@ -33,13 +33,31 @@ const EvaraDeepAnalytics = () => {
     const [boreDepthInput, setBoreDepthInput] = useState('200');
     const [pumpDepthInput, setPumpDepthInput] = useState('180');
 
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    const handleDelete = async () => {
+        if (!hardwareId) return;
+        setIsDeleting(true);
+        try {
+            await api.delete(`/admin/nodes/${hardwareId}`);
+            navigate('/nodes');
+        } catch (err) {
+            console.error("Failed to delete node:", err);
+            alert("Failed to delete node. Please try again.");
+            setIsDeleting(false);
+            setShowDeleteConfirm(false);
+        }
+    };
+
     // ── Unified Analytics Data ────────────────────────────────────────────────
     const {
         data: unifiedData,
         isLoading: analyticsLoading,
+        isFetching: analyticsFetching,
         isError: telemetryError,
         refetch,
-        error: hookError
+        error: analyticsError
     } = useDeviceAnalytics(hardwareId);
 
     const deviceConfig = ('config' in (unifiedData?.config ?? {})
@@ -72,7 +90,7 @@ const EvaraDeepAnalytics = () => {
     }, [deviceConfig]);
 
     const isDataMissing = historyFeeds.length === 0;
-    const isConfigMissing = hookError === "Telemetry configuration missing";
+    const isConfigMissing = analyticsError === "Telemetry configuration missing";
     const isOffline = onlineStatus === 'Offline';
 
     // ── Stale age ─────────────────────────────────────────────────────────────
@@ -179,64 +197,51 @@ const EvaraDeepAnalytics = () => {
                 <div className="max-w-[1440px] mx-auto flex flex-col gap-6">
 
                     {/* ── Breadcrumb row ─────────────────────────────────────────── */}
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <nav className="flex items-center gap-1.5 text-sm" aria-label="Breadcrumb">
-                            <button
-                                onClick={() => navigate('/')}
-                                className="text-[#5e6ad2] hover:text-[#4f5bc4] font-medium transition-colors"
-                            >
-                                Home
-                            </button>
-                            <span
-                                className="material-symbols-rounded text-slate-400"
-                                style={{ fontSize: 16 }}
-                            >
-                                chevron_right
-                            </span>
-                            <button
-                                onClick={() => navigate('/nodes')}
-                                className="text-[#5e6ad2] hover:text-[#4f5bc4] font-medium transition-colors"
-                            >
-                                All Nodes
-                            </button>
-                            <span
-                                className="material-symbols-rounded text-slate-400"
-                                style={{ fontSize: 16 }}
-                            >
-                                chevron_right
-                            </span>
-                            <span className="text-[#1C1C1E] font-semibold truncate max-w-[160px]">
-                                {deviceName}
-                            </span>
-                        </nav>
-                        <div className="flex items-center gap-2">
-                            <span
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase ${isOffline
-                                    ? 'bg-red-100 text-red-600'
-                                    : 'bg-green-100 text-green-600'
-                                    }`}
-                            >
-                                <span
-                                    className={`size-2 rounded-full ${isOffline ? 'bg-red-500' : 'bg-green-500'
-                                        }`}
-                                />
-                                {isOffline ? 'Offline' : 'Online'}
-                            </span>
-                            {staleLabel && (
-                                <span className="text-xs text-slate-400 italic hidden sm:inline">
-                                    {staleLabel}
-                                </span>
-                            )}
-                            <button
-                                onClick={() => refetch()}
-                                className="size-9 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors apple-glass-card border-0"
-                                title="Refresh"
-                            >
-                                <span className="material-symbols-rounded" style={{ fontSize: 18 }}>
-                                    refresh
-                                </span>
-                            </button>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <nav className="flex items-center gap-1 text-xs font-normal" style={{ color: '#888' }}>
+                                <button onClick={() => navigate('/')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0">
+                                    Home
+                                </button>
+                                <span className="material-icons" style={{ fontSize: '16px', color: '#888' }}>chevron_right</span>
+                                <button onClick={() => navigate('/nodes')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0 font-normal" style={{ color: '#888' }}>
+                                    All Nodes
+                                </button>
+                                <span className="material-icons" style={{ fontSize: '16px', color: '#888' }}>chevron_right</span>
+                                <span className="font-bold" style={{ color: '#222', fontWeight: '700' }}>{deviceName}</span>
+                            </nav>
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => refetch()}
+                                    disabled={analyticsFetching}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-200 shadow-md apple-glass-card active:scale-95 ${analyticsFetching ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#0077ff]/10 hover:bg-[#0077ff]/20 text-[#0077ff] border border-[#0077ff]/30'}`}
+                                >
+                                    <span className={`material-icons ${analyticsFetching ? 'animate-spin' : ''}`} style={{ fontSize: '14px' }}>
+                                        {analyticsFetching ? 'sync' : 'refresh'}
+                                    </span>
+                                    {analyticsFetching ? 'Refreshing...' : 'Refresh Data'}
+                                </button>
+
+                                {/* Delete Button */}
+                                {user?.role === 'superadmin' && (
+                                    <button 
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-600 border border-red-500/40 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-200 shadow-md active:scale-95"
+                                    >
+                                        <span className="material-icons" style={{ fontSize: '14px' }}>delete_forever</span>
+                                        Delete Node
+                                    </button>
+                                )}
+
+                                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${isOffline ? 'bg-red-50 text-red-500 border border-red-100' : 'bg-[#34C759]/30 text-[#1e7e34] border border-[#34C759]/60 shadow-md transition-all duration-300'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isOffline ? 'bg-red-500' : 'bg-[#34C759] animate-pulse shadow-[0_0_8px_rgba(52,199,89,0.6)]'}`} />
+                                    {isOffline ? 'Offline' : 'Online'}
+                                </div>
+                            </div>
                         </div>
+                        <h1 className="text-3xl font-black m-0" style={{ color: '#1C1C1E', letterSpacing: '-0.5px' }}>
+                            {deviceName} Deep Analytics
+                        </h1>
                     </div>
 
                     {isConfigMissing && (
@@ -259,7 +264,7 @@ const EvaraDeepAnalytics = () => {
                         </div>
                     )}
 
-                    {telemetryError && !isConfigMissing && (
+                    {analyticsError && !isConfigMissing && (
                         <div className="rounded-2xl px-4 py-3 text-sm font-medium flex items-center justify-between gap-4"
                             style={{ background: 'rgba(255,59,48,0.1)', color: '#FF3B30' }}>
                             <div className="flex items-center gap-2">
@@ -544,8 +549,8 @@ const EvaraDeepAnalytics = () => {
                                 {user?.role === "superadmin" && (
                                     <button
                                         onClick={handleSave}
-                                        className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all hover:brightness-110 active:scale-[0.98]"
-                                        style={{ background: 'linear-gradient(135deg,#0077ff,#0055cc)', boxShadow: '0 4px 12px rgba(0,119,255,0.3)' }}
+                                        className="w-full py-3 rounded-xl font-bold text-sm text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/20"
+                                        style={{ background: 'linear-gradient(135deg, #3A7AFE, #2563EB)' }}
                                     >
                                         Save Mapping
                                     </button>
@@ -602,7 +607,7 @@ const EvaraDeepAnalytics = () => {
                                         key={r}
                                         onClick={() => setTimeRange(r)}
                                         className={`px-5 py-2 rounded-full text-[10px] font-bold uppercase transition-all ${timeRange === r
-                                            ? 'bg-white/90 text-blue-600 shadow-sm'
+                                            ? 'bg-[#3A7AFE] text-white shadow-sm'
                                             : 'text-slate-500 hover:text-slate-900'
                                             }`}
                                     >
@@ -631,14 +636,14 @@ const EvaraDeepAnalytics = () => {
                                         <p className="text-sm font-bold text-slate-700">Water Column Depth</p>
                                         <p className="text-[10px] text-slate-400 uppercase tracking-wider">Height of water in bore over time</p>
                                     </div>
-                                    <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(0,119,255,0.1)', color: '#0077ff' }}>Avg: {avgWaterCol}</span>
+                                     <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(58,122,254,0.1)', color: '#3A7AFE' }}>Avg: {avgWaterCol}</span>
                                 </div>
                                 <ResponsiveContainer width="100%" height={300}>
                                     <AreaChart data={depthHistory.slice(-50)} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
                                         <defs>
                                             <linearGradient id="deepWaterGrad" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#0077ff" stopOpacity={0.25} />
-                                                <stop offset="95%" stopColor="#0077ff" stopOpacity={0} />
+                                                 <stop offset="5%" stopColor="#3A7AFE" stopOpacity={0.25} />
+                                                <stop offset="95%" stopColor="#3A7AFE" stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
@@ -650,7 +655,7 @@ const EvaraDeepAnalytics = () => {
                                             itemStyle={{ color: '#fff', fontSize: 13, fontWeight: 700 }}
                                             formatter={(v: any) => [`${parseFloat(v || 0).toFixed(1)} m`, 'Water Column']}
                                         />
-                                        <Area type="monotone" dataKey="waterCol" stroke="#0077ff" strokeWidth={2.5} fill="url(#deepWaterGrad)" dot={false} activeDot={{ r: 5, fill: '#0077ff', strokeWidth: 0 }} />
+                                         <Area type="monotone" dataKey="waterCol" stroke="#3A7AFE" strokeWidth={2.5} fill="url(#deepWaterGrad)" dot={false} activeDot={{ r: 5, fill: '#3A7AFE', strokeWidth: 0 }} />
                                     </AreaChart>
                                 </ResponsiveContainer>
 
@@ -667,6 +672,46 @@ const EvaraDeepAnalytics = () => {
                     © {new Date().getFullYear()} EvaraDeep Systems · Precision Borewell Analytics
                 </p>
             </footer>
+
+            {/* Delete Confirmation Popup */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pt-20" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+                    onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
+                    <div className="rounded-3xl p-8 flex flex-col w-full max-sm:max-w-xs max-w-sm text-center"
+                        style={{
+                            background: 'white',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                        }}
+                        onClick={e => e.stopPropagation()}>
+                        
+                        <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="material-icons" style={{ fontSize: '32px' }}>delete_outline</span>
+                        </div>
+                        
+                        <h3 className="text-xl font-bold mb-2 text-gray-900">Delete this Node?</h3>
+                        <p className="text-sm text-gray-500 mb-8">
+                            This will permanently remove <strong>{deviceName}</strong> and all its historical telemetry data. This action cannot be undone.
+                        </p>
+                        
+                        <div className="flex flex-col gap-3">
+                            <button 
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className={`w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider transition-all ${isDeleting ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200 active:scale-95'}`}
+                            >
+                                {isDeleting ? 'Deleting...' : 'Yes, Delete Node'}
+                            </button>
+                            <button 
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={isDeleting}
+                                className="w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                                )}
         </div>
     );
 };

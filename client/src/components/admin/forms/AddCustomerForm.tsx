@@ -10,7 +10,6 @@ import {
   User,
   Mail,
   Phone,
-  Building2,
   MapPin,
   Loader2,
   CheckCircle,
@@ -21,7 +20,6 @@ import {
 
 import { adminService } from "../../../services/admin";
 import { useZones } from "../../../hooks/useZones";
-import { useCommunities } from "../../../hooks/useCommunities";
 import { useToast } from "../../ToastProvider";
 import { FormField } from "../../forms/FormField";
 import { customerSchema, type CustomerInput } from "../../../schemas";
@@ -40,7 +38,6 @@ export const AddCustomerForm = ({ onSubmit, onCancel, initialData }: Props) => {
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
@@ -49,11 +46,6 @@ export const AddCustomerForm = ({ onSubmit, onCancel, initialData }: Props) => {
       status: "active",
     },
   });
-
-  const watchRegionFilter = watch("regionFilter" as any);
-  const { communities, isLoading: loadingCommunities } = useCommunities(
-    watchRegionFilter || undefined,
-  );
 
   const sortedRegions = useMemo(
     () =>
@@ -219,38 +211,19 @@ export const AddCustomerForm = ({ onSubmit, onCancel, initialData }: Props) => {
       {/* Assignment */}
       <div className="bg-blue-50/30 p-6 rounded-2xl border border-blue-100 space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-tight">
-          <Building2 size={16} className="text-blue-600" /> Community Assignment
+          <MapPin size={16} className="text-blue-600" /> Zone Assignment
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField label="Zone Filter" icon={MapPin}>
+        <div className="grid grid-cols-1 gap-4">
+          <FormField label="Assign Zone" required icon={MapPin}>
             <select
               {...register("regionFilter" as any)}
               className={inputClass()}
               disabled={loadingRegions}
             >
-              <option value="">All Zones</option>
+              <option value="">Select Zone...</option>
               {sortedRegions.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.zoneName}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField
-            label="Community"
-            required
-            icon={Building2}
-            error={errors.community_id?.message}
-          >
-            <select
-              {...register("community_id")}
-              className={inputClass(errors.community_id)}
-              disabled={loadingCommunities}
-            >
-              <option value="">Select community...</option>
-              {communities?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
                 </option>
               ))}
             </select>
@@ -273,7 +246,7 @@ export const AddCustomerForm = ({ onSubmit, onCancel, initialData }: Props) => {
           whileTap={{ scale: 0.98 }}
           type="submit"
           disabled={isSubmitting}
-          className="flex items-center gap-2 px-8 py-3 bg-[#1F2937] text-white text-sm font-bold rounded-xl hover:bg-[#111827] transition-all disabled:opacity-50 shadow-md"
+          className="flex items-center gap-2 px-8 py-3 bg-[#3A7AFE] text-white text-sm font-bold rounded-xl hover:bg-[#2563EB] transition-all disabled:opacity-50 shadow-md"
         >
           {isSubmitting ? (
             <Loader2 size={16} className="animate-spin" />

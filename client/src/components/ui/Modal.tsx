@@ -71,7 +71,7 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md', animation
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div
-                className={`absolute inset-0 bg-[#1F2937]/40 backdrop-blur-sm transition-opacity ${isClosing ? 'animate-out fade-out duration-200' : 'animate-in fade-in duration-300'
+                className={`absolute inset-0 bg-slate-900/20 backdrop-blur-[2px] transition-opacity ${isClosing ? 'animate-out fade-out duration-200' : 'animate-in fade-in duration-300'
                     }`}
                 onClick={handleClose}
             />
@@ -92,7 +92,7 @@ export const Modal = ({ isOpen, onClose, title, children, size = 'md', animation
                         </div>
 
                         {/* Content */}
-                        <div className="p-6 overflow-y-auto max-h-[80vh] custom-scrollbar">
+                        <div className="apple-glass-content p-6 overflow-y-auto max-h-[72vh] custom-scrollbar" style={{ position: 'relative', zIndex: 1 }}>
                             {children}
                         </div>
                     </div>
