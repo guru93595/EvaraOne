@@ -8,7 +8,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - MQTT_BROKER_URL=mqtt://mosquitto:1883
-      - DB_URL=postgres://postgres:password@timescaledb:5432/telemetry
+      - DB_URL=postgres://postgres:${POSTGRES_PASSWORD:-password}@timescaledb:5432/telemetry
     depends_on:
       - redis
       - mosquitto
@@ -35,7 +35,7 @@ services:
   timescaledb:
     image: timescale/timescaledb:latest-pg14
     environment:
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_USER: postgres
       POSTGRES_DB: telemetry
     ports:
