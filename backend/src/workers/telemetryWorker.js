@@ -95,8 +95,8 @@ async function processDevice(device) {
 
         // CRITICAL FIX: Emit real-time update via Socket.IO
         const payload = {
-            deviceId: device.id,
-            percentage: telemetryData.percentage,
+            device_id: device.id,
+            level_percentage: telemetryData.level_percentage ?? telemetryData.percentage,
             volume: telemetryData.volume,
             flow_rate: telemetryData.flow_rate,
             total_reading: telemetryData.total_reading,

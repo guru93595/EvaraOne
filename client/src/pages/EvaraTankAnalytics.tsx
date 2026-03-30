@@ -1426,7 +1426,8 @@ const EvaraTankAnalytics = () => {
 
 
 
-                                <div className="flex flex-col mt-4 pt-0 gap-2 z-10 w-full">
+                                
+                            <div className="flex flex-col mt-4 pt-0 gap-2 z-10 w-full">
                                     <div className="grid grid-cols-2 gap-2 w-full">
                                         <div className="text-left rounded-xl p-3 flex flex-col justify-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)' }}>
                                             <p className="text-[10px] font-bold uppercase tracking-wider m-0 mb-1" style={{ color: '#8E8E93' }}>Total Cap</p>
@@ -1459,7 +1460,7 @@ const EvaraTankAnalytics = () => {
                                         ) : null}
                                     </div>
                                 </div>
-                            </div>
+</div>
 
                             {/* Estimation Cards - Moved here below Tank Card */}
                             <div className="grid grid-cols-2 gap-4 w-full">

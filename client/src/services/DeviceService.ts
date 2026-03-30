@@ -73,7 +73,7 @@ export interface ProvisioningResult {
   };
 }
 
-class NodeService {
+export class NodeService {
   private static instance: NodeService;
 
   private constructor() { }
@@ -114,7 +114,8 @@ class NodeService {
     else if (categoryRaw.includes('sump')) category = 'sump';
     else category = 'tank'; // Default
 
-    const displayName = data.displayName || data.display_name || data.label || hardwareId;
+    const displayName = data.device_name || data.deviceName || data.displayName || data.display_name || data.name || data.label || hardwareId;
+
 
     const conf = data.configuration || {};
     const depthM = conf.depth ?? data.depth ?? data.height_m ?? data.tankHeight ?? data.height ?? data.max_depth ?? 0;
@@ -146,7 +147,7 @@ class NodeService {
       firestore_id: docId,
       node_key: hardwareId,
       hardwareId: hardwareId,
-      label: data.label || displayName,
+      label: displayName,
       displayName: displayName,
       name: displayName,
       status: computeDeviceStatus(lastSeenTime),
@@ -164,6 +165,7 @@ class NodeService {
       zone_name: data.zone_name,
       communityId: data.community_id || data.communityId,
       zoneId: data.zone_id || data.zoneId,
+      customerId: data.customer_id || data.customerId || data.client_id || data.uid || "",
       capacity: capacityLitres,
       depth: depthM,
       // DRIVER FIX: Elevate telemetry_snapshot as the primary source for last_telemetry.
@@ -261,7 +263,7 @@ class NodeService {
       if (communityId) {
         socket.emit("subscribe_community", communityId);
       }
-      socket.on("telemetry_update", onTelemetryUpdate);
+    socket.on("device:update", onTelemetryUpdate);
     };
 
     if (socket.connected) {
@@ -280,7 +282,7 @@ class NodeService {
     return () => {
       isSubscribed = false;
       clearInterval(pollInterval);
-      socket.off("telemetry_update", onTelemetryUpdate);
+      socket.off("device:update", onTelemetryUpdate);
       socket.off("connect", setupSocket);
       if (communityId) {
         socket.emit("unsubscribe_community", communityId);

@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  /* ── EvaraFlow Dashboard Layout ── */
+  /* Mirrors the meter reading card's min-h-[460px] Tailwind class.      */
+  /* Update this single variable if the meter card ever changes height.  */
+  --flow-meter-card-height: 460px;
+
   --color-evara-blue: #0077be;
   --color-evara-blue-light: #4dabf5;
   --color-evara-blue-dark: #004ba0;
@@ -113,6 +118,13 @@
 
 .premium-gradient {
   background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+}
+
+/* ── EvaraFlow peer-height utility ──────────────────────────────────────── */
+/* Apply to any card that must match the analog meter reading card height.  */
+/* Height is driven by --flow-meter-card-height in :root above.             */
+.flow-peer-card {
+  min-height: var(--flow-meter-card-height);
 }
 
 /* Global Styles */

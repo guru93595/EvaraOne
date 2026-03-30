@@ -13,8 +13,9 @@ import type { TankDimensions } from './tankCalculations';
 
 export const getTankLevel = (node: any, snap: any): number => {
     // 1. Trust pure backend field first (snapshot from telemetryWorker or nodesController)
-    const pct = snap?.level_percentage ?? snap?.Level ?? snap?.level ?? 
+    const pct = snap?.level_percentage ?? snap?.percentage ?? snap?.Level ?? snap?.level ?? 
               node?.telemetry_snapshot?.level_percentage ?? 
+              node?.telemetry_snapshot?.percentage ??
               node?.last_telemetry?.level_percentage ?? 
               node?.last_telemetry?.Level;
     

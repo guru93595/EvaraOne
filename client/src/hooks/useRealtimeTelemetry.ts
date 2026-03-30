@@ -34,7 +34,7 @@ export const useRealtimeTelemetry = (deviceId: string | undefined) => {
 
         socket.on('connect', onConnect);
         socket.on('disconnect', onDisconnect);
-        socket.on('telemetry_update', onTelemetryUpdate);
+        socket.on('device:update', onTelemetryUpdate);
 
         // Emit subscription
         socket.emit('subscribe_device', deviceId);
@@ -42,7 +42,7 @@ export const useRealtimeTelemetry = (deviceId: string | undefined) => {
         return () => {
             socket.off('connect', onConnect);
             socket.off('disconnect', onDisconnect);
-            socket.off('telemetry_update', onTelemetryUpdate);
+            socket.off('device:update', onTelemetryUpdate);
             socket.emit('unsubscribe_device', deviceId);
         };
     }, [deviceId]);

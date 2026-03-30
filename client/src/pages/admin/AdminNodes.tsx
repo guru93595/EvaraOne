@@ -19,6 +19,7 @@ import { adminService } from "../../services/admin";
 import type { NodeCategory, AnalyticsType } from "../../types/database";
 import { useToast } from "../../components/ToastProvider";
 import { deviceService } from "../../services/DeviceService";
+import { getCustomerName, getZoneName } from "../../utils/customerUtils";
 
 const AdminNodes = () => {
   const navigate = useNavigate();
@@ -89,24 +90,24 @@ const AdminNodes = () => {
   const enrichedNodes = useMemo(() => {
     return nodes.map((node) => {
       let zoneName = "Loading...";
-      let communityName = "Loading...";
       let customerName = "Loading...";
 
       // Find hierarchy data
-      const zone = hierarchy.find((z) => z.id === node.zoneId);
+      // 🎯 FIX: Support both node.zoneId and node.zone_id
+      const zone = hierarchy.find((z) => z.id === (node.zoneId || node.zone_id));
       if (zone) {
-        zoneName = zone.zoneName;
+        zoneName = getZoneName(zone);
         // Search all customers in the zone
-        const cust = (zone.customers || []).find((cu: any) => cu.id === node.customerId);
+        // 🎯 FIX: Use canonical customerId for matching
+        const cust = (zone.customers || []).find((cu: any) => cu.id === node.customerId || cu.customerId === node.customerId || cu.id === node.customer_id);
         if (cust) {
-          customerName = cust.display_name || cust.full_name;
+          customerName = getCustomerName(cust);
         }
       }
 
       return {
         ...node,
         zoneName,
-        communityName,
         customerName,
       };
     });

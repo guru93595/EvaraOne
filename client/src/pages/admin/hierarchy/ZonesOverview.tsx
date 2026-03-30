@@ -138,10 +138,10 @@ const RegionsOverview = () => {
           return (
             <div
               key={zone.id}
-              onClick={() => navigate(`/superadmin/zones/${zone.id}/customers`)}
+              onClick={() => navigate(`/superadmin/customers?zoneId=${zone.id}`)}
               className="apple-glass-card group cursor-pointer"
             >
-              <div className="apple-glass-content relative flex flex-col h-full">
+              <div className="apple-glass-content relative flex flex-col h-full p-[24px]">
                 {/* Background Icon */}
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
                   <MapPin size={80} className="text-[#3A7AFE]" />

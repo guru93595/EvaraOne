@@ -1,47 +1,53 @@
-const axios = require('axios');
+const { db } = require("./src/config/firebase.js");
+const axios = require("axios");
 
-// HIMALAYA Channel Info from environment variables
-const channelId = process.env.THINGSPEAK_CHANNEL_ID || '3275001';
-const apiKey = process.env.THINGSPEAK_API_KEY || 'KF4EBSLE9D1ZXTWJ';
+async function testHimalaya() {
+    const hardwareId = "HIMALAYA";
+    console.log(`Testing Node: ${hardwareId}`);
 
-async function audit() {
-    console.log(`Auditing Channel: ${channelId}...`);
     try {
-        const url = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&results=1`;
+        // 1. Get Registry
+        const deviceDoc = await db.collection("devices").doc(hardwareId).get();
+        if (!deviceDoc.exists) throw new Error("Device not found in registry");
+        const registry = deviceDoc.data();
+        console.log("Registry Type:", registry.device_type);
+        console.log("Channel ID:", registry.thingspeak_channel_id);
+
+        // 2. Get Metadata
+        const metaDoc = await db.collection("evaraflow").doc(hardwareId).get();
+        if (!metaDoc.exists) throw new Error("Metadata not found in evaraflow collection");
+        const metadata = metaDoc.data();
+        console.log("Metadata Fields:", {
+            total: metadata.meter_reading_field,
+            flow: metadata.flow_rate_field
+        });
+
+        // 3. Fetch from ThingSpeak
+        const url = `https://api.thingspeak.com/channels/${metadata.thingspeak_channel_id}/feeds.json?api_key=${metadata.thingspeak_read_api_key}&results=1`;
+        console.log("Fetching from ThingSpeak:", url.replace(metadata.thingspeak_read_api_key, '***'));
         const response = await axios.get(url);
         const feeds = response.data.feeds || [];
-        
-        if (feeds.length === 0) {
-            console.log("No feeds found for this channel.");
-            return;
+        const latestFeed = feeds[0] || {};
+        console.log("Raw Feed:", latestFeed);
+
+        // 4. Manual Smart-Scan logic
+        let totalReadingFieldKey = metadata.meter_reading_field;
+        if (!totalReadingFieldKey || !latestFeed[totalReadingFieldKey]) {
+            let maxVal = 100;
+            for (let i = 1; i <= 8; i++) {
+                const val = parseFloat(latestFeed[`field${i}`]);
+                if (!isNaN(val) && val > maxVal) {
+                    maxVal = val;
+                    totalReadingFieldKey = `field${i}`;
+                }
+            }
         }
-
-        const latest = feeds[0];
-        console.log("\n--- LATEST FEED DATA ---");
-        console.log(`Timestamp: ${latest.created_at}`);
-        
-        for (let i = 1; i <= 8; i++) {
-            const field = `field${i}`;
-            const val = latest[field];
-            console.log(`${field}: ${val} ${val !== null && val !== undefined ? '(DATA FOUND)' : '(empty)'}`);
-        }
-
-        console.log("\n--- SUGGESTED MAPPING ---");
-        let suggestedTotal = null;
-        let suggestedFlow = null;
-
-        for (let i = 1; i <= 8; i++) {
-            const val = parseFloat(latest[`field${i}`]);
-            if (!isNaN(val) && val > 100) suggestedTotal = `field${i}`;
-            if (!isNaN(val) && val > 0 && val < 500 && !suggestedFlow) suggestedFlow = `field${i}`;
-        }
-
-        console.log(`Suggested Total Liters Field: ${suggestedTotal || 'Not found'}`);
-        console.log(`Suggested Flow Rate Field: ${suggestedFlow || 'Not found'}`);
+        console.log("Identified Total Field:", totalReadingFieldKey);
+        console.log("Total Value:", latestFeed[totalReadingFieldKey]);
 
     } catch (err) {
-        console.error("Audit failed:", err.message);
+        console.error("Test failed:", err.message);
     }
 }
 
-audit();
+testHimalaya().then(() => process.exit(0));

@@ -42,7 +42,7 @@ const calculateDeviceStatus = (lastUpdatedAt) => {
     const isSameDay = lastDataDate === currentDate;
     
     if (isSameDay) {
-      if (timeDiffMinutes <= 20) {
+      if (timeDiffMinutes <= 30) {
         return "ONLINE";
       } else {
         return "OFFLINE_RECENT";
@@ -67,21 +67,19 @@ const processThingSpeakData = (device, feeds) => {
   const status = calculateDeviceStatus(lastUpdatedAt);
   
   // Find the correct field(s)
-  const isFlowMeter = device.type === 'flow_meter' || device.device_type === 'flow_meter';
+  const isFlowMeter = ['flow_meter', 'evaraflow'].includes(device.type?.toLowerCase()) || 
+                      ['flow_meter', 'evaraflow'].includes(device.device_type?.toLowerCase());
   
   if (isFlowMeter) {
     const mapping = device.mapping || {};
-    const flowKeys = ['flowField', 'flow_rate', 'flow_rate_field'];
-    const totalKeys = ['volumeField', 'current_reading', 'total_reading', 'meter_reading_field'];
-
+    
+    // Explicit field mapping from device document or nested mapping
     const fieldFlow = 
-        device.flow_rate_field || device.flowField || 
-        mapping.flowField || mapping.flow_rate_field || 
+        device.flow_rate_field || mapping.flow_rate_field || mapping.flowField || 
         (latestFeed.field4 !== undefined ? "field4" : "field3");
 
     const fieldTotal = 
-        device.meter_reading_field || device.volumeField || 
-        mapping.volumeField || mapping.meter_reading_field || 
+        device.meter_reading_field || mapping.meter_reading_field || mapping.volumeField || 
         (latestFeed.field5 !== undefined ? "field5" : "field1");
 
     const flow_rate = parseFloat(latestFeed[fieldFlow]) || 0;
@@ -113,10 +111,11 @@ const processThingSpeakData = (device, feeds) => {
   const volume = (device.capacity * percentage) / 100;
   
   return {
-    deviceId: device.id,
+    device_id: device.id,
     rawDistance,
     processedLevel,
-    percentage,
+    level_percentage: percentage,
+    percentage, // Keep for legacy
     volume,
     lastUpdatedAt,
     status,
@@ -129,27 +128,31 @@ const processThingSpeakData = (device, feeds) => {
  */
 const updateFirestoreTelemetry = async (deviceType, deviceId, telemetryData, feeds) => {
   try {
+    // Standardized snapshot for both collections
+    const snapshot = {
+      flow_rate: telemetryData.flow_rate || 0,
+      total_liters: telemetryData.total_liters || 0,
+      level_percentage: telemetryData.percentage || 0,
+      timestamp: telemetryData.lastUpdatedAt,
+      status: telemetryData.status
+    };
+
     const updatePayload = {
       lastUpdatedAt: telemetryData.lastUpdatedAt,
       status: telemetryData.status,
       lastTelemetryFetch: new Date().toISOString(),
-      raw_data: telemetryData.raw_data
+      raw_data: telemetryData.raw_data,
+      telemetry_snapshot: snapshot
     };
 
     if (telemetryData.rawDistance !== undefined) updatePayload.lastValue = telemetryData.rawDistance;
     if (telemetryData.processedLevel !== undefined) updatePayload.processedLevel = telemetryData.processedLevel;
-    if (telemetryData.percentage !== undefined) updatePayload.percentage = telemetryData.percentage;
+    if (telemetryData.percentage !== undefined) {
+      updatePayload.level_percentage = telemetryData.percentage;
+      updatePayload.percentage = telemetryData.percentage; // Keep for legacy
+    }
     if (telemetryData.flow_rate !== undefined) updatePayload.flow_rate = telemetryData.flow_rate;
     if (telemetryData.total_liters !== undefined) updatePayload.total_liters = telemetryData.total_liters;
-    
-    // DRIVER: Also populate telemetry_snapshot for frontend fallback consistency
-    updatePayload.telemetry_snapshot = {
-      flow_rate: telemetryData.flow_rate || 0,
-      total_liters: telemetryData.total_liters || 0,
-      percentage: telemetryData.percentage || 0,
-      timestamp: telemetryData.lastUpdatedAt,
-      status: telemetryData.status
-    };
     
     // Store telemetry history (last 20 readings)
     if (feeds && feeds.length > 0) {
@@ -159,7 +162,26 @@ const updateFirestoreTelemetry = async (deviceType, deviceId, telemetryData, fee
       }));
     }
     
+    // 1. Update Specific Metadata Collection (evaratank/evaraflow/...)
     await db.collection(deviceType.toLowerCase()).doc(deviceId).update(updatePayload);
+
+    // 2. SaaS DUAL-SYNC: Update Global Registry ('devices' collection)
+    const registryUpdate = {
+        status: telemetryData.status,
+        last_seen: telemetryData.lastUpdatedAt,
+        last_online_at: admin.firestore.FieldValue.serverTimestamp(),
+        telemetry_snapshot: snapshot
+    };
+
+    // If it's HIMALAYA or any himalaya device, ensure its type is corrected to evaraflow during sync
+    if (deviceId === 'HIMALAYA' || deviceId === 'HIMALAYA 2' || 
+        deviceId.toLowerCase().includes('himalaya')) {
+        registryUpdate.device_type = 'evaraflow';
+        registryUpdate.analytics_template = 'EvaraFlow';
+    }
+
+    await db.collection("devices").doc(deviceId).update(registryUpdate);
+
   } catch (err) {
     console.error(`[DeviceState] Firestore update failed for ${deviceId}:`, err.message);
     throw err;

@@ -3,15 +3,19 @@ import clsx from 'clsx';
 
 interface KPIAuthoritativeCardProps {
     total: number;
-    online: number;
-    offline: number;
+    value1: number; // e.g. Online or Active
+    value2: number; // e.g. Offline or Inactive
+    label1?: string;
+    label2?: string;
     className?: string;
 }
 
 export const KPIAuthoritativeCard = ({
     total,
-    online,
-    offline,
+    value1,
+    value2,
+    label1 = "Online",
+    label2 = "Offline",
     className
 }: KPIAuthoritativeCardProps) => {
     return (
@@ -28,11 +32,11 @@ export const KPIAuthoritativeCard = ({
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#16A34A] shadow-[0_0_8px_rgba(22,163,74,0.4)]" />
-                    <span className="text-[10px] font-[800] text-gray-500">{online} Online</span>
+                    <span className="text-[10px] font-[800] text-gray-500 uppercase tracking-tight">{value1} {label1}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#E5484D] shadow-[0_0_8px_rgba(229,72,77,0.4)]" />
-                    <span className="text-[10px] font-[800] text-gray-500">{offline} Offline</span>
+                    <span className="text-[10px] font-[800] text-gray-500 uppercase tracking-tight">{value2} {label2}</span>
                 </div>
             </div>
         </div>

@@ -8,6 +8,7 @@ import {
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 import { useNodes } from "../hooks/useNodes";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import { getDeviceAnalyticsRoute } from "../utils/deviceRouting";
 import { socket } from "../services/api";
@@ -163,16 +164,16 @@ const NodeCardItem = ({ node, realtimeStatuses }: { node: any, realtimeStatuses:
   
   // DRIVER FIX: Compute status in real-time using the same logic as Analytics pages
   const realtimeSnapshot = realtimeStatuses[node.id];
-  const effectiveLastSeen = realtimeSnapshot?.timestamp || realtimeSnapshot?.created_at || node.last_seen || node.last_online_at || node.updated_at || null;
+  const effectiveLastSeen = realtimeSnapshot?.timestamp || realtimeSnapshot?.lastUpdatedAt || realtimeSnapshot?.created_at || node.last_seen || node.last_online_at || node.updated_at || null;
   const currentStatus = computeDeviceStatus(effectiveLastSeen);
   const isOnline = currentStatus === "Online";
   const isTank = ["evaratank", "EvaraTank", "tank", "sump", "OHT", "Sump"].includes((node.category || node.asset_type || "").toString());
 
-  const lastTel = realtimeSnapshot || node.last_telemetry || {};
+  const lastTel = realtimeSnapshot || node.telemetry_snapshot || node.last_telemetry || {};
   
   // DRIVER FIX: Use the backend's authoritative smoothed level for absolute parity. 
   // This eliminates divergence between Map, List, and Analytics.
-  const pct = lastTel.level_percentage ?? getTankLevel(node, lastTel);
+  const pct = lastTel.level_percentage ?? lastTel.percentage ?? getTankLevel(node, lastTel);
 
   const cardBgStyle = isOnline 
     ? { background: "linear-gradient(135deg, #f0fce8 0%, #e0f8de 50%, #cbf2ce 100%)" }
@@ -288,6 +289,7 @@ const AllNodes = () => {
   >("all");
 
   const { showToast } = useToast();
+  const { user } = useAuth();
   const { nodes, loading, error } = useNodes();
 
   // Track shown errors to prevent notification spam
@@ -310,6 +312,12 @@ const AllNodes = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (nodes.length > 0) {
+      console.log(`[AllNodes] Role: ${user?.role}, Total Nodes Received: ${nodes.length}`);
+    }
+  }, [nodes, user?.role]);
+
   // Show toast notification ONCE per unique error - prevents flooding
   useEffect(() => {
     if (error && !shownErrorsRef.current.has(error)) {
@@ -324,7 +332,7 @@ const AllNodes = () => {
     
     // Consistent status calculation for filtering
     const snapshot = realtimeStatuses[n.id] || n || {};
-    const effectiveLastSeen = snapshot.timestamp || snapshot.created_at || n.last_seen || n.last_online_at || n.updated_at || null;
+    const effectiveLastSeen = snapshot.timestamp || snapshot.lastUpdatedAt || snapshot.created_at || n.last_seen || n.last_online_at || n.updated_at || null;
     const currentStatus = computeDeviceStatus(effectiveLastSeen);
     const matchStatus = statusFilter === "all" || currentStatus === statusFilter;
     const q = search.toLowerCase();

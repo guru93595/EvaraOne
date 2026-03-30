@@ -3,7 +3,7 @@ const express = require("express");
 const path = require("path");
 const cors = require("cors");
 const adminRoutes = require("./routes/admin.routes.js");
-const { getDashboardSummary, getHierarchy, getAuditLogs } = require("./controllers/admin.controller.js");
+const { getDashboardSummary, getHierarchy, getAuditLogs, getZoneStats } = require("./controllers/admin.controller.js");
 const { requireAuth, checkOwnership } = require("./middleware/auth.middleware.js");
 const tenantCheck = require("./middleware/tenantCheck.middleware.js");
 const rbac = require("./middleware/rbac.middleware.js");
@@ -152,6 +152,35 @@ io.on("connection", (socket) => {
     socket.on("unsubscribe_device", (deviceId) => {
         socket.leave(`room:${deviceId}`);
     });
+    
+    socket.on("subscribe_community", async (communityId) => {
+        // SaaS Architecture: Security Guard
+        if (socket.user.role !== "superadmin" && socket.user.community_id !== communityId) {
+             console.warn(`[Socket.io] Forbidden community subscription attempt by ${socket.user.uid} for ${communityId}`);
+             return;
+        }
+
+        console.log(`[Socket.io] Client ${socket.user?.uid} subscribed to community ${communityId}`);
+        
+        try {
+             // Find all devices for this community and join their rooms
+             const snapshot = await db.collection("devices").where("community_id", "==", communityId).get();
+             snapshot.docs.forEach(doc => {
+                 socket.join(`room:${doc.id}`);
+             });
+        } catch (e) {
+             console.error("[Socket.io] Community subscription failed:", e);
+        }
+    });
+
+    socket.on("unsubscribe_community", async (communityId) => {
+        try {
+             const snapshot = await db.collection("devices").where("community_id", "==", communityId).get();
+             snapshot.docs.forEach(doc => {
+                 socket.leave(`room:${doc.id}`);
+             });
+        } catch (e) {}
+    });
 
     socket.on("disconnect", () => {
         console.log(`[Socket.io] Client disconnected`);
@@ -210,7 +239,7 @@ app.get("/api/v1/admin/hierarchy", globalSaaSAuth, getHierarchy);
 app.get("/api/v1/admin/audit-logs", globalSaaSAuth, getAuditLogs);
 app.get("/api/v1/stats/dashboard/summary", globalSaaSAuth, getDashboardSummary);
 // Stats route fallback
-app.get("/api/v1/stats/zones", globalSaaSAuth, (req, res) => res.json([]));
+app.get("/api/v1/stats/zones", globalSaaSAuth, getZoneStats);
 
 // Production: Serve frontend static files (MUST be before error handlers)
 if (process.env.NODE_ENV === "production") {

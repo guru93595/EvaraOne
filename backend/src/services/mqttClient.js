@@ -23,13 +23,14 @@ mqttClient.on("message", async (topic, message) => {
         const deviceId = topic.split("/")[1];
 
         
-        // Push IMMEDIATE realtime update to frontend via WebSockets
+        // SaaS Architecture: Emit to specific room only
         if (global.io) {
-            global.io.emit("telemetry_update", {
-                node_id: deviceId,
+            const eventPayload = {
+                device_id: deviceId, // Standardized key
                 ...payload,
                 timestamp: new Date()
-            });
+            };
+            global.io.to(`room:${deviceId}`).emit("device:update", eventPayload);
         }
 
         // THROTTLED Update to Firestore snapshot (Latest State)

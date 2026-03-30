@@ -92,7 +92,7 @@ class RealtimeSyncService {
     if (!this.socket) return;
 
     // Real-time telemetry updates
-    this.socket.on('telemetry_update', (data) => {
+    this.socket.on('device:update', (data) => {
       this.status.lastSync = new Date().toISOString();
       this.notifySubscribers('telemetry', data);
     });
@@ -198,16 +198,16 @@ class RealtimeSyncService {
   // Join device-specific rooms for targeted updates
   joinDeviceRoom(deviceId: string) {
     if (this.socket?.connected) {
-      this.socket.emit('join_device_room', { deviceId });
-      console.log(`[RealtimeSync] Joined device room: ${deviceId}`);
+      this.socket.emit('subscribe_device', deviceId);
+      console.log(`[RealtimeSync] Subscribed to device: ${deviceId}`);
     }
   }
 
   // Leave device room
   leaveDeviceRoom(deviceId: string) {
     if (this.socket?.connected) {
-      this.socket.emit('leave_device_room', { deviceId });
-      console.log(`[RealtimeSync] Left device room: ${deviceId}`);
+      this.socket.emit('unsubscribe_device', deviceId);
+      console.log(`[RealtimeSync] Unsubscribed from device: ${deviceId}`);
     }
   }
 

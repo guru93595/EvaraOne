@@ -107,18 +107,18 @@ export const WaterAnalyticsCards: React.FC<WaterAnalyticsCardsProps> = ({ analyt
       
       <Card 
         title="Fill Rate" 
-        value={analytics.fillRateLpm > 0 && analytics.fillRateLpm <= 500 ? formatRate(analytics.fillRateLpm, true) : analytics.fillRateLpm > 500 ? 'Invalid reading' : '--'} 
+        value={analytics.fillRateLph > 0 && analytics.fillRateLph <= 30000 ? formatRate(analytics.fillRateLph, true) : analytics.fillRateLph > 30000 ? 'Invalid reading' : '--'} 
         unit="" 
         icon="trending_up"
-        highlight={analytics.fillRateLpm > 0 && analytics.fillRateLpm <= 500 ? 'positive' : analytics.fillRateLpm > 500 ? 'negative' : 'neutral'}
+        highlight={analytics.fillRateLph > 0 && analytics.fillRateLph <= 30000 ? 'positive' : analytics.fillRateLph > 30000 ? 'negative' : 'neutral'}
       />
       
       <Card 
         title="Drain Rate" 
-        value={analytics.drainRateLpm > 0 && analytics.drainRateLpm <= 500 ? formatRate(analytics.drainRateLpm, false) : analytics.drainRateLpm > 500 ? 'Invalid reading' : '--'} 
+        value={analytics.drainRateLph > 0 && analytics.drainRateLph <= 30000 ? formatRate(analytics.drainRateLph, false) : analytics.drainRateLph > 30000 ? 'Invalid reading' : '--'} 
         unit="" 
         icon="trending_down"
-        highlight={analytics.drainRateLpm > 0 && analytics.drainRateLpm <= 500 ? 'negative' : analytics.drainRateLpm > 500 ? 'negative' : 'neutral'}
+        highlight={analytics.drainRateLph > 0 && analytics.drainRateLph <= 30000 ? 'negative' : analytics.drainRateLph > 30000 ? 'negative' : 'neutral'}
       />
       
       <Card 
@@ -179,7 +179,7 @@ export const WaterAnalyticsCards: React.FC<WaterAnalyticsCardsProps> = ({ analyt
 
       <Card 
         title="Peak Consumption Rate" 
-        value={analytics.peakConsumptionRateLpm ? `${analytics.peakConsumptionRateLpm.toFixed(1)} L/min` : '--'} 
+        value={analytics.peakConsumptionRateLph ? `${analytics.peakConsumptionRateLph.toFixed(1)} L/hr` : '--'} 
         unit="" 
         icon="speed"
         highlight="neutral"

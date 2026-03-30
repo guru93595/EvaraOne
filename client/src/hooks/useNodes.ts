@@ -1,68 +1,63 @@
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { deviceService } from "../services/DeviceService";
+import { useEffect, useState } from "react";
+import { db } from "../lib/firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { NodeService } from "../services/DeviceService";
 import { useAuth } from "../context/AuthContext";
-import { socket } from "../services/api";
 
 export const useNodes = (searchQuery: string = "") => {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Unified real-time socket listener
   useEffect(() => {
-    const handleUpdate = (data: any) => {
-      const deviceId = data.device_id || data.node_id;
-      if (!deviceId) return;
+    if (!user?.id) return;
 
-      // Invalidate all node-related queries to trigger a fresh fetch from cache/API
-      // This ensures all UI components using useNodes stay perfectly in sync
-      queryClient.invalidateQueries({ queryKey: ["nodes"] });
-    };
+    let q;
+    if (user.role === "superadmin") {
+      // Admins see everything
+      q = query(collection(db, "devices"));
+    } else {
+      // Customers see only active assigned devices
+      q = query(
+        collection(db, "devices"),
+        where("customer_id", "==", user.resolved_customer_id || user.id),
+        where("is_active", "==", true)
+      );
+    }
 
-    socket.on("telemetry_update", handleUpdate);
-    socket.on("node_update", handleUpdate);
-
-    return () => {
-      socket.off("telemetry_update", handleUpdate);
-      socket.off("node_update", handleUpdate);
-    };
-  }, [queryClient]);
-
-  const {
-    data: nodes = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["nodes", searchQuery, user?.id, user?.role],
-    queryFn: async () => {
-      const isSuperAdmin = user?.role === "superadmin";
-      const mappedNodes = await deviceService.getMapNodes(
-        undefined,
-        isSuperAdmin ? undefined : user?.id,
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const mappedNodes = snapshot.docs.map(doc => 
+        NodeService.mapNodeData({ id: doc.id, ...doc.data() })
       );
 
-      if (!searchQuery) return mappedNodes;
+      let filteredNodes = mappedNodes;
+      if (searchQuery) {
+        const searchLower = searchQuery.toLowerCase();
+        filteredNodes = mappedNodes.filter(
+          (n: any) =>
+            (n.displayName || "").toLowerCase().includes(searchLower) ||
+            (n.hardwareId || "").toLowerCase().includes(searchLower) ||
+            (n.label || "").toLowerCase().includes(searchLower) ||
+            (n.id || "").toLowerCase().includes(searchLower)
+        );
+      }
 
-      const searchLower = searchQuery.toLowerCase();
-      return mappedNodes.filter(
-        (n: any) =>
-          (n.displayName || "").toLowerCase().includes(searchLower) ||
-          (n.hardwareId || "").toLowerCase().includes(searchLower) ||
-          (n.label || "").toLowerCase().includes(searchLower) ||
-          (n.id || "").toLowerCase().includes(searchLower),
-      );
-    },
-    refetchInterval: 10000, // Reduced polling frequency as we have socket support
-    staleTime: 5000,
-    gcTime: 1000 * 60 * 10,
-    retry: 1,
-  });
+      setNodes(filteredNodes);
+      setIsLoading(false);
+    }, (err) => {
+      console.error("[useNodes] Firestore Error:", err);
+      setError(err.message);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id, user?.resolved_customer_id, user?.role, searchQuery]);
 
   return {
     nodes,
     loading: isLoading,
-    error: error instanceof Error ? error.message : error ? String(error) : null,
-    refresh: refetch,
+    error,
+    refresh: () => {} // No-op for onSnapshot
   };
 };

@@ -1,15 +1,8 @@
 import { useMemo } from 'react';
 
 // ─── Hard limit on any pump rate — physical maximum for this system ───────────
-const MAX_RATE_LPM = 500; // L/min — Guard 4
+const MAX_RATE_LPH = 30000; // L/hr (approx 500 L/min)
 
-// ─── Guard 5 — Log every rejected reading ─────────────────────────────────────
-function logRejected(guard: string, reason: string, values: Record<string, unknown>) {
-  console.warn(`[RateGuard][${guard}] REJECTED — ${reason}`, {
-    timestamp: new Date().toISOString(),
-    ...values,
-  });
-}
 
 export interface TankAlerts {
   lowLevel: boolean;        // level < 20%
@@ -36,11 +29,11 @@ export interface WaterAnalytics {
   availableWaterLiters: number;
   totalCapacityLiters: number;
   remainingCapacityLiters: number;
-  fillRateLpm: number;
-  drainRateLpm: number;
+  fillRateLph: number;
+  drainRateLph: number;
   todaysConsumptionLiters: number;
   peakConsumptionTime: string | null;
-  peakConsumptionRateLpm: number | null;
+  peakConsumptionRateLph: number | null;
   peakDrainTime: string | null;
   peakDrainVolumeLiters: number | null;
   refillsToday: number;
@@ -90,7 +83,6 @@ export const useWaterAnalytics = (
     const waterHeightM = Math.min(usableHeightM, Math.max(0, usableHeightM - sensorDistance));
     const waterLevelPercent = usableHeightM > 0 ? (waterHeightM / usableHeightM) * 100 : 0;
     const availableWaterLiters = (waterLevelPercent / 100) * tankCapacityLiters;
-    const remainingCapacityLiters = tankCapacityLiters - availableWaterLiters;
     // ── Build normalised readings from history ────────────────────────────────
     // Each reading uses field1 (raw cm distance) for rate calculation.
     // Falls back to level_percentage only if field1 is unavailable.
@@ -167,53 +159,49 @@ export const useWaterAnalytics = (
       volumeLiters: medianVolumes[i]
     }));
 
-    let fillRateLpm = 0;
-    let drainRateLpm = 0;
+    // ── STEP 1: Compute independent slope from history ────────────────────────
+    // We look for a reading at least 20 minutes old to get a stable trend.
+    // We prioritize the reading nearest to 1 hour ago for maximum stability.
+    let independentSlopeLph = 0;
     let rateDataValid = false;
 
-    // ── 5-Point Queue Rate Calculation (Moving Window Delta) ──
-    // As requested: track readings in a queue and calculate rate from 1st to 5th point.
-    const calculateQueueRate = (readings: Reading[]) => {
-      if (readings.length < 2) return 0;
+    if (filteredReadings.length >= 2) {
+      const newest = filteredReadings[filteredReadings.length - 1];
       
-      const first = readings[0];
-      const last = readings[readings.length - 1];
+      // Look for readings that are at least 20 minutes old
+      const candidateOldReadings = filteredReadings.filter(
+        r => (newest.timestamp - r.timestamp) >= 20 * 60000
+      );
       
-      const deltaVol = last.volumeLiters - first.volumeLiters;
-      const deltaTMin = (last.timestamp - first.timestamp) / 60000;
-      
-      if (deltaTMin < 0.01) return 0; // Avoid division by zero/very small time
-      return deltaVol / deltaTMin;
-    };
-
-    // Use at most 5 recent readings within the last 30 mins
-    const recentQueue = filteredReadings
-      .filter(r => (Date.now() - r.timestamp) < 30 * 60000)
-      .slice(-5);
-
-    if (recentQueue.length >= 2) {
-      const rate = calculateQueueRate(recentQueue);
-      const absRate = Math.abs(rate);
-
-      // Stable threshold: if change is less than 0.2 L/min, consider it stable
-      if (absRate < 0.2) {
-        fillRateLpm = 0;
-        drainRateLpm = 0;
-        rateDataValid = true;
-      } else if (rate > 0) {
-        fillRateLpm = Math.min(rate, MAX_RATE_LPM);
-        drainRateLpm = 0;
-        rateDataValid = true;
-      } else {
-        drainRateLpm = Math.min(absRate, MAX_RATE_LPM);
-        fillRateLpm = 0;
-        rateDataValid = true;
+      if (candidateOldReadings.length > 0) {
+        // We pick the OLDEST available reading that is still within our buffer (up to ~60 min)
+        // This gives us the widest possible window for the most stable slope.
+        const oldest = candidateOldReadings[0]; 
+        const dvL   = newest.volumeLiters - oldest.volumeLiters;
+        const dtMin = (newest.timestamp  - oldest.timestamp) / 60000;
+        
+        if (dtMin > 0) {
+          const slopeLpm = dvL / dtMin;
+          independentSlopeLph = slopeLpm * 60;
+          rateDataValid = true;
+        }
       }
-      
-      // Final hard cap check for UI
-      if (fillRateLpm > MAX_RATE_LPM || drainRateLpm > MAX_RATE_LPM) {
-        logRejected('Guard4', `Queue rate ${rate.toFixed(1)} exceeds limit`, { rate });
-      }
+    }
+
+    // ── STEP 2: Use slope to set rate cards (L/hr) ────────────────────────────────
+    let fillRateLph  = 0;
+    let drainRateLph = 0;
+
+    // Dead zone: ignore fluctuations below 20 L/hr (approx 0.3 L/min)
+    if (Math.abs(independentSlopeLph) < 20) {
+      fillRateLph  = 0;
+      drainRateLph = 0;
+    } else if (independentSlopeLph > 0) {
+      fillRateLph  = Math.min(independentSlopeLph, MAX_RATE_LPH);
+      drainRateLph = 0;
+    } else {
+      drainRateLph = Math.min(Math.abs(independentSlopeLph), MAX_RATE_LPH);
+      fillRateLph  = 0;
     }
 
     // ── Refill cycles today ───────────────────────────────────────────────────
@@ -262,7 +250,7 @@ export const useWaterAnalytics = (
 
     // ── Today's consumption ────────────────────────────────────────────────────
     let todaysConsumptionLiters = 0;
-    let peakConsumptionRateLpm: number | null = null;
+    let peakConsumptionRateLph: number | null = null;
     let peakConsumptionTime: string | null = null;
     let peakDrainVolumeLiters: number | null = null;
     let peakDrainTime: string | null = null;
@@ -287,9 +275,9 @@ export const useWaterAnalytics = (
             const consumed = Math.abs(deltaVolumeL);
             if (isToday) {
               todaysConsumptionLiters += consumed;
-              const r = consumed / deltaTMin;
-              if (r <= MAX_RATE_LPM && (peakConsumptionRateLpm === null || r > peakConsumptionRateLpm)) {
-                peakConsumptionRateLpm = r;
+              const r = consumed / (deltaTMin / 60); // L/hr
+              if (r <= MAX_RATE_LPH && (peakConsumptionRateLph === null || r > peakConsumptionRateLph)) {
+                peakConsumptionRateLph = r;
                 peakConsumptionTime = new Date(prev.timestamp).toISOString();
               }
             }
@@ -321,15 +309,100 @@ export const useWaterAnalytics = (
       }
     }
 
-    // ── Estimated empty / full times ──────────────────────────────────────────
-    let estimatedEmptyTimeMinutes: number | null = null;
-    let estimatedFullTimeMinutes: number | null = null;
+    // ── STEP 3: Dual-slope history scan for permanent estimations ─────────────
+    // risingSlope  = rate from most recent rising segment → used for Est. Full
+    // fallingSlope = rate from most recent falling segment → used for Est. Empty
+    // These are INDEPENDENT of fillRateLph and drainRateLph display cards
+    let risingSlopeLpm  = 0; 
+    let fallingSlopeLpm = 0;
+    
+    // Limits for segment validation
+    const MAX_RATE_LPM = MAX_RATE_LPH / 60;
 
-    if (drainRateLpm > 0.1 && availableWaterLiters > 0) {
-      estimatedEmptyTimeMinutes = availableWaterLiters / drainRateLpm;
+    if (filteredReadings.length >= 2) {
+      // ── Find most recent RISING segment ──
+      let riseStart: Reading | null = null;
+      let bestRiseRate = 0;
+
+      for (let i = filteredReadings.length - 1; i >= 1; i--) {
+        const curr = filteredReadings[i];
+        const prev = filteredReadings[i - 1];
+        const dv   = curr.volumeLiters - prev.volumeLiters;
+        const dt   = (curr.timestamp  - prev.timestamp) / 60000;
+
+        if (dv > 0 && dt > 0) {
+          // still in a rising segment — extend it backwards
+          if (!riseStart) riseStart = curr;
+        } else if (riseStart) {
+          // segment ended — compute slope from prev to riseStart
+          const segDv = riseStart.volumeLiters - prev.volumeLiters;
+          const segDt = (riseStart.timestamp  - prev.timestamp) / 60000;
+          if (segDt > 5 && segDv > 0) {
+            bestRiseRate = segDv / segDt;
+          }
+          break;
+        }
+      }
+      // If still in rising segment at start of history
+      if (riseStart && bestRiseRate === 0 && filteredReadings.length >= 2) {
+        const oldest = filteredReadings[0];
+        const segDv  = riseStart.volumeLiters - oldest.volumeLiters;
+        const segDt  = (riseStart.timestamp  - oldest.timestamp) / 60000;
+        if (segDt > 5 && segDv > 0) bestRiseRate = segDv / segDt;
+      }
+      if (bestRiseRate > 0.3 && bestRiseRate < MAX_RATE_LPM) {
+        risingSlopeLpm = bestRiseRate;
+      }
+
+      // ── Find most recent FALLING segment ──
+      let fallStart: Reading | null = null;
+      let bestFallRate = 0;
+
+      for (let i = filteredReadings.length - 1; i >= 1; i--) {
+        const curr = filteredReadings[i];
+        const prev = filteredReadings[i - 1];
+        const dv   = curr.volumeLiters - prev.volumeLiters;
+        const dt   = (curr.timestamp  - prev.timestamp) / 60000;
+
+        if (dv < 0 && dt > 0) {
+          if (!fallStart) fallStart = curr;
+        } else if (fallStart) {
+          const segDv = prev.volumeLiters - fallStart.volumeLiters;
+          const segDt = (fallStart.timestamp - prev.timestamp) / 60000;
+          if (segDt > 5 && segDv > 0) {
+            bestFallRate = segDv / segDt;
+          }
+          break;
+        }
+      }
+      if (fallStart && bestFallRate === 0 && filteredReadings.length >= 2) {
+        const oldest = filteredReadings[0];
+        const segDv  = oldest.volumeLiters - fallStart.volumeLiters;
+        const segDt  = (fallStart.timestamp - oldest.timestamp) / 60000;
+        if (segDt > 5 && segDv > 0) bestFallRate = Math.abs(segDv / segDt);
+      }
+      if (bestFallRate > 0.3 && bestFallRate < MAX_RATE_LPM) {
+        fallingSlopeLpm = bestFallRate;
+      }
     }
-    if (fillRateLpm > 0.1 && remainingCapacityLiters > 0) {
-      estimatedFullTimeMinutes = remainingCapacityLiters / fillRateLpm;
+
+    // ── Est. times — always compute from history slopes ───────────────────────
+    let estimatedFullTimeMinutes:  number | null = null;
+    let estimatedEmptyTimeMinutes: number | null = null;
+
+    const currentVol    = filteredReadings.length > 0
+      ? filteredReadings[filteredReadings.length - 1].volumeLiters
+      : availableWaterLiters;
+    const remainingCap  = tankCapacityLiters - currentVol;
+
+    // Est. Time Until Full — only when tank is NOT already full
+    if (risingSlopeLpm > 0.3 && remainingCap > 0) {
+      estimatedFullTimeMinutes = remainingCap / risingSlopeLpm;
+    }
+
+    // Est. Time Until Empty — only when tank is NOT already empty
+    if (fallingSlopeLpm > 0.3 && currentVol > 0) {
+      estimatedEmptyTimeMinutes = currentVol / fallingSlopeLpm;
     }
 
     // Use the latest filtered reading for real-time display metrics
@@ -345,7 +418,7 @@ export const useWaterAnalytics = (
     const alertLowLevel    = finalLevelPercent < 20;
     const alertCriticalLow = finalLevelPercent < 10;
     const alertOverflow    = finalLevelPercent > 95;
-    const alertHighDrain   = drainRateLpm > 100;
+    const alertHighDrain   = drainRateLph > 6000; // 100 L/min * 60 = 6000 L/hr
     const alertNoFill      = alertLowLevel && noFillForTwoHours;
     // Sensor fault: sensor reports 0 volume but level would be > 5% based on history
     const alertSensorFault = finalVolumeLiters === 0 && finalLevelPercent > 5;
@@ -391,11 +464,11 @@ export const useWaterAnalytics = (
       availableWaterLiters: finalVolumeLiters,
       totalCapacityLiters: tankCapacityLiters,
       remainingCapacityLiters: tankCapacityLiters - finalVolumeLiters,
-      fillRateLpm,
-      drainRateLpm,
+      fillRateLph,
+      drainRateLph,
       todaysConsumptionLiters,
       peakConsumptionTime,
-      peakConsumptionRateLpm,
+      peakConsumptionRateLph,
       peakDrainTime,
       peakDrainVolumeLiters,
       refillsToday,
@@ -429,9 +502,10 @@ export const formatTimeDuration = (minutes: number | null): string => {
 };
 
 export const formatRate = (rate: number, isPositive: boolean): string => {
-  if (!isFinite(rate) || rate > MAX_RATE_LPM) return 'Invalid reading';
+  if (!isFinite(rate) || rate > MAX_RATE_LPH) return 'Invalid reading';
   const absRate = Math.abs(rate);
-  if (absRate < 1) return `${isPositive ? '+' : '-'}${absRate.toFixed(2)} L/min`;
-  if (absRate < 100) return `${isPositive ? '+' : '-'}${absRate.toFixed(1)} L/min`;
-  return `${isPositive ? '+' : '-'}${Math.round(absRate)} L/min`;
+  if (absRate === 0) return 'Stable';
+  if (absRate < 10) return `${isPositive ? '+' : '-'}${absRate.toFixed(2)} L/hr`;
+  if (absRate < 100) return `${isPositive ? '+' : '-'}${absRate.toFixed(1)} L/hr`;
+  return `${isPositive ? '+' : '-'}${Math.round(absRate)} L/hr`;
 };

@@ -58,7 +58,7 @@ export interface Customer {
   regionFilter?: string;
   created_at?: string;
   updated_at?: string;
-
+  device_ids?: string[];
   // Computed properties
   deviceCount?: number;
   communityName?: string;

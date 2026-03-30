@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, browserSessionPersistence } from "firebase/auth";
 import { getFirestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -14,6 +14,11 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+
+// Force browser session persistence so user must log in on fresh browser loads
+setPersistence(auth, browserSessionPersistence).catch((err) => {
+    console.error("Failed to set auth persistence:", err);
+});
 export const db = getFirestore(app);
 
 // Enable performance optimizations with offline persistence

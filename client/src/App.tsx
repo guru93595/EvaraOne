@@ -22,11 +22,12 @@ const EvaraDeepAnalytics = React.lazy(() => import('./pages/EvaraDeepAnalytics')
 const EvaraFlowAnalytics = React.lazy(() => import('./pages/EvaraFlowAnalytics'));
 const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminCustomers = React.lazy(() => import('./pages/admin/AdminCustomers'));
+const ConfigureNode = React.lazy(() => import('./pages/ConfigureNode'));
+const ConfigureFlow = React.lazy(() => import('./pages/ConfigureFlow'));
 
 const CustomerDetails = React.lazy(() => import('./pages/admin/hierarchy/CustomerDetails'));
 const ZonesOverview = React.lazy(() => import('./pages/admin/hierarchy/ZonesOverview'));
 
-const ZoneCustomers = React.lazy(() => import('./pages/admin/hierarchy/ZoneCustomers'));
 const AdminConfig = React.lazy(() => import('./pages/admin/AdminConfig'));
 
 // ── Loading fallback for Suspense ─────────────────────────────────────
@@ -93,6 +94,8 @@ function App() {
                                                 <Route path="/dashboard" element={<Dashboard />} />
                                                 <Route path="/nodes" element={<AllNodes />} />
                                                 <Route path="/node/:id" element={<NodeDetails />} />
+                                                <Route path="/configure/:id" element={<ConfigureNode />} />
+                                                <Route path="/configure-flow/:id" element={<ConfigureFlow />} />
                                                 <Route path="/evaratank" element={<EvaraTankAnalytics />} />
                                                 <Route path="/evaratank/:hardwareId" element={<EvaraTankAnalytics />} />
                                                 <Route path="/evaradeep" element={<EvaraDeepAnalytics />} />
@@ -117,7 +120,6 @@ function App() {
                                                             <CustomerDetails />
                                                         </ErrorBoundary>
                                                     } />
-                                                    <Route path="zones/:regionId/customers" element={<ZoneCustomers />} />
 
                                                     {/* Legacy route redirects or keep if needed */}
                                                     <Route path="nodes" element={<Navigate to="zones" replace />} />

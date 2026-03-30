@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNodes } from "../hooks/useNodes";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "../context/AuthContext";
+import { db } from "../lib/firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { NodeService } from "../services/DeviceService";
 import { adminService } from "../services/admin";
 import { socket } from "../services/api";
 import { computeDeviceStatus } from "../services/DeviceService";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
@@ -128,9 +131,51 @@ const UsagePeakChart = ({ nodes }: { nodes: any[] }) => {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 function Dashboard() {
-  const { nodes } = useNodes() as { nodes: any[] };
-
+  const { user } = useAuth();
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
+
+  // 🎯 SINGLE SOURCE OF TRUTH: Real-Time Active Devices Listener
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log("[Dashboard] Initializing real-time listener. User:", user.id, "Role:", user.role);
+
+    let q;
+    if (user.role === "superadmin") {
+      // 🎯 SOURCE OF TRUTH: SuperAdmins see ALL devices across the entire network
+      // This includes inactive/offline devices for holistic management.
+      q = query(collection(db, "devices"));
+    } else {
+      // 🎯 CUSTOMER FILTER: Customers see ONLY their active assigned hardware
+      q = query(
+        collection(db, "devices"),
+        where("customer_id", "==", user.resolved_customer_id || user.id),
+        where("is_active", "==", true)
+      );
+    }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedNodes = snapshot.docs.map(doc => 
+        NodeService.mapNodeData({ id: doc.id, ...doc.data() })
+      );
+      
+      if (user.role === "superadmin") {
+        console.log(`[Dashboard] SUPER ADMIN DEVICES: ${fetchedNodes.length} nodes found (Global View)`);
+      } else {
+        console.log(`[Dashboard] CUSTOMER DEVICES: ${fetchedNodes.length} nodes found (Active Filtered View)`);
+      }
+
+      setNodes(fetchedNodes);
+      setLoading(false);
+    }, (error) => {
+      console.error("[Dashboard] Firestore Listener Error:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id]);
 
   useEffect(() => {
     const handleUpdate = (data: any) => {
@@ -145,14 +190,52 @@ function Dashboard() {
 
   // Removed legacy polling as useNodes handles it
 
-  const { totalDevices, onlineDevices, offlineDevices, tankNodes, flowNodes, deepNodes } = useMemo(() => {
+  const { 
+    totalDevices, 
+    value1, 
+    value2, 
+    label1, 
+    label2, 
+    tankNodes, 
+    flowNodes, 
+    deepNodes 
+  } = useMemo(() => {
     const total = nodes.length;
-    const online = nodes.filter(n => (realtimeStatuses[n.id] || n.status) === "Online").length;
+    
+    // Role-specific Metric Logic
+    let v1, v2, l1, l2;
+    
+    if (user?.role === "superadmin") {
+      // Metrics for Admins: Activation Status
+      v1 = nodes.filter(n => n.is_active).length;
+      v2 = nodes.filter(n => !n.is_active).length;
+      l1 = "Active";
+      l2 = "Inactive";
+    } else {
+      // Metrics for Customers: Connectivity Status
+      v1 = nodes.filter(n => (realtimeStatuses[n.id] || n.status) === "Online").length;
+      v2 = total - v1;
+      l1 = "Online";
+      l2 = "Offline";
+    }
+
     const tank = nodes.filter(n => ["evaratank", "EvaraTank", "tank", "sump"].includes(n.asset_type)).length;
     const flow = nodes.filter(n => ["evaraflow", "EvaraFlow", "flow", "flow_meter"].includes(n.asset_type)).length;
     const deep = nodes.filter(n => ["evaradeep", "EvaraDeep", "bore", "govt"].includes(n.asset_type)).length;
-    return { totalDevices: total, onlineDevices: online, offlineDevices: total - online, tankNodes: tank, flowNodes: flow, deepNodes: deep };
-  }, [nodes, realtimeStatuses]); const { data: auditLogs = [] } = useQuery({
+
+    return { 
+      totalDevices: total, 
+      value1: v1, 
+      value2: v2, 
+      label1: l1, 
+      label2: l2, 
+      tankNodes: tank, 
+      flowNodes: flow, 
+      deepNodes: deep 
+    };
+  }, [nodes, realtimeStatuses, user?.role]);
+
+  const { data: auditLogs = [] } = useQuery({
     queryKey: ["dashboard_audit_logs"],
     queryFn: async () => {
       const logs = await adminService.getAuditLogs();
@@ -207,8 +290,21 @@ function Dashboard() {
   }), [nodes]);
 
   const totalStale = explorerNodes.filter((n) => n.isStale).length;
-  const systemStatus = totalStale > nodes.length * 0.2 ? "Attention" : "Optimal";
+  const systemStatus = nodes.length > 0 && totalStale > nodes.length * 0.2 ? "Attention" : "Optimal";
   const healthPct = systemStatus === "Optimal" ? 92 : 78;
+
+  if (loading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-transparent">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-[#004ba0] animate-spin" />
+          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.2em] animate-pulse">
+            Synchronizing Network Intelligence...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-screen overflow-hidden bg-transparent relative flex flex-col pt-[85px] lg:pt-[95px]">
@@ -244,8 +340,10 @@ function Dashboard() {
             <div className="grid grid-cols-3 gap-4 shrink-0" style={{ height: "160px" }}>
               <KPIAuthoritativeCard
                 total={totalDevices}
-                online={onlineDevices}
-                offline={offlineDevices}
+                value1={value1}
+                value2={value2}
+                label1={label1}
+                label2={label2}
                 className="h-full"
               />
               <AlertsActivityPanel

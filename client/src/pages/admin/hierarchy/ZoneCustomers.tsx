@@ -1,111 +1,140 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import { adminService } from "../../../services/admin";
 import {
   ChevronRight,
   User,
   MapPin,
   ArrowLeft,
   AlertCircle,
-  Edit2,
-  Trash2,
   Plus,
 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import { AddCustomerForm } from "../../../components/admin/forms/AddCustomerForm";
 import { useToast } from "../../../components/ToastProvider";
+import { db } from "../../../lib/firebase";
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc
+} from "firebase/firestore";
 import type {
   Zone as RegionRow,
-
   Customer as UserProfileRow,
   Device as DeviceRow,
 } from "../../../types/entities";
 
-type CustomerWithDevices = UserProfileRow & {
-  devices?: Pick<
-    DeviceRow,
-    "id" | "status" | "analytics_template" | "node_key"
-  >[];
-  distributor_id?: string;
-};
 
 const RegionCustomers = () => {
-  const { regionId } = useParams(); // regionId is the zone name
+  const { zoneId } = useParams(); // Using standardized zoneId from URL
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [customers, setCustomers] = useState<CustomerWithDevices[]>([]);
+  const [customers, setCustomers] = useState<UserProfileRow[]>([]);
+  const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [regionData, setRegionData] = useState<RegionRow | null>(null);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const { showToast } = useToast();
 
+  // 🎯 DEBUG LOGS
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [custData, regData] = await Promise.all([
-          adminService.getCustomers(),
-          adminService.getRegions(),
-        ]);
-        setCustomers(custData as CustomerWithDevices[]);
-        setRegionData(
-          (regData as RegionRow[]).find((r) => r.id === regionId) || null,
-        );
-      } catch (error) {
-        console.error("Failed to fetch zone customers data:", error);
-      } finally {
-        setLoading(false);
+    console.log("ZoneCustomers Component Active - Zone ID:", zoneId);
+  }, [zoneId]);
+
+  // 1. Fetch Zone Metadata (Real-Time)
+  useEffect(() => {
+    if (!zoneId) return;
+
+    const unsub = onSnapshot(doc(db, "zones", zoneId), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as RegionRow;
+        setRegionData({ ...data, id: snap.id });
+        console.log(`[Firestore] Zone Meta Sync: ${data.zoneName}`);
+      } else {
+        console.error("Zone not found in registry:", zoneId);
+        setRegionData(null);
       }
-    };
-    fetchData();
-  }, [regionId]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [custData, regData] = await Promise.all([
-        adminService.getCustomers(),
-        adminService.getRegions(),
-      ]);
-      setCustomers(custData as CustomerWithDevices[]);
-      const foundRegion = (regData as RegionRow[]).find(
-        (r) => r.id === regionId,
-      );
-      setRegionData(foundRegion || null);
-    } catch (error) {
-      console.error("Failed to fetch zone customers data:", error);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Zone listener failed:", err);
+      setLoading(false);
+    });
 
-  const handleDeleteCustomer = async (
-    e: React.MouseEvent,
-    customerId: string,
-  ) => {
-    e.stopPropagation();
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this customer? This will remove their access and all assigned devices.",
-      )
-    )
-      return;
+    return () => unsub();
+  }, [zoneId]);
 
-    try {
-      await adminService.deleteCustomer(customerId);
-      showToast("Customer deleted successfully", "success");
-      fetchData();
-    } catch (err: any) {
-      showToast(err.message || "Failed to delete customer", "error");
-    }
-  };
+  // 2. Fetch Customers for this Zone (Real-Time)
+  useEffect(() => {
+    if (!zoneId) return;
 
-  // Filter Logic: Important bugfix -> use zone_id
-  // Filter Logic: Show customers assigned to this zone (checking new zone_id and legacy regionFilter)
-  const regionCustomers = customers.filter(
-    (cust) => cust.zone_id === regionId || cust.regionFilter === regionId
-  );
+    const q = query(
+      collection(db, "customers"),
+      where("zone_id", "==", zoneId)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const custData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as UserProfileRow[];
+
+      console.log(`[Firestore] Zone Customers Sync: ${custData.length} records`);
+      setCustomers(custData);
+    }, (err) => {
+      console.error("Customers listener failed:", err);
+      showToast("Real-time sync lost. Please refresh.", "error");
+    });
+
+    return () => unsub();
+  }, [zoneId]);
+
+  // 3. Fetch Devices for this Zone (Real-Time) to show icons/counts
+  useEffect(() => {
+    if (!zoneId) return;
+
+    const q = query(
+      collection(db, "devices"),
+      where("zone_id", "==", zoneId)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const allDevices = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as DeviceRow[];
+
+      console.log(`[Firestore] Zone Devices Sync: ${allDevices.length} assets`);
+      setDevices(allDevices);
+    }, (err) => {
+      console.error("Devices listener failed:", err);
+    });
+
+    return () => unsub();
+  }, [zoneId]);
+
+  // 🎯 REACTIVE DATA JOIN: Join Customers and Devices for the table
+  const regionCustomers = useMemo(() => {
+    return customers.map(cust => ({
+      ...cust,
+      devices: devices.filter(d => d.customer_id === cust.id)
+    }));
+  }, [customers, devices]);
+
+
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <div className="w-8 h-8 border-[3px] border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+        <p className="text-slate-500 font-medium font-mono text-xs uppercase tracking-widest">
+          Sycnhronizing Cloud Registry...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="glass-dashboard min-h-screen p-8">
@@ -165,9 +194,9 @@ const RegionCustomers = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[rgba(255,255,255,0.1)]">
-              {regionCustomers.map((customer) => {
-                const hasAlert = customer.devices?.some(
-                  (d) => d.status !== "Online"
+              {regionCustomers.map((customer: any) => {
+                const hasAlert = (customer.devices || []).some(
+                  (d: any) => d.status !== "Online"
                 );
 
                 return (
@@ -225,7 +254,7 @@ const RegionCustomers = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="flex -space-x-2">
-                          {(customer.devices || []).map((dev) => (
+                          {(customer.devices || []).map((dev: any) => (
                             <div
                               key={dev.id}
                               className={`w-7 h-7 rounded-[8px] border border-[rgba(255,255,255,0.4)] shadow-sm flex items-center justify-center text-[10px] text-white font-[600] ${
@@ -247,32 +276,19 @@ const RegionCustomers = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {user?.role === "superadmin" && (
-                          <div className="flex items-center gap-1 mr-2 invisible group-hover:visible">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingCustomer(customer);
-                              }}
-                              className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={(e) =>
-                                handleDeleteCustomer(e, customer.id)
-                              }
-                              className="p-1.5 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                        <ChevronRight
-                          size={18}
-                          className="text-[#1F2937] opacity-30 group-hover:text-[#3A7AFE] group-hover:opacity-100 transition-colors inline-block"
-                        />
+                      <div className="flex items-center justify-end">
+                        <button
+                          onClick={() =>
+                            navigate(`/superadmin/customers/${customer.id}`)
+                          }
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-[11px] font-[700] transition-all active:scale-95 group-hover:shadow-sm"
+                        >
+                          Manage Profile
+                          <ChevronRight
+                            size={14}
+                            className="text-blue-600 opacity-60 group-hover:translate-x-0.5 transition-transform"
+                          />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -314,7 +330,7 @@ const RegionCustomers = () => {
           onSubmit={() => {
             setShowCreateModal(false);
             setEditingCustomer(null);
-            fetchData();
+            // No manual fetch needed anymore due to onSnapshot!
           }}
           onCancel={() => {
             setShowCreateModal(false);

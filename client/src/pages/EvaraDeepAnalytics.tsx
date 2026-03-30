@@ -82,15 +82,20 @@ const EvaraDeepAnalytics = () => {
     // ── Seed local state from DB config when it first loads ───────────────────
     useEffect(() => {
         if (!deviceConfig) return;
-        if (deviceConfig.depth_field) setFieldDepth(deviceConfig.depth_field);
-        if (deviceConfig.total_bore_depth && deviceConfig.total_bore_depth > 0)
-            setBoreDepthInput(String(deviceConfig.total_bore_depth));
-        if (deviceConfig.static_water_level && deviceConfig.static_water_level > 0)
-            setPumpDepthInput(String(deviceConfig.static_water_level));
+        const conf = (deviceConfig as any).config || (deviceConfig as any).configuration || {};
+        const depthField = (deviceConfig as any).depth_field || conf.depth_field;
+        const totalBore = (deviceConfig as any).total_bore_depth || conf.total_bore_depth;
+        const staticLevel = (deviceConfig as any).static_water_level || conf.static_water_level;
+
+        if (depthField) setFieldDepth(depthField);
+        if (totalBore && totalBore > 0)
+            setBoreDepthInput(String(totalBore));
+        if (staticLevel && staticLevel > 0)
+            setPumpDepthInput(String(staticLevel));
     }, [deviceConfig]);
 
     const isDataMissing = historyFeeds.length === 0;
-    const isConfigMissing = analyticsError === "Telemetry configuration missing";
+    const isConfigMissing = !deviceConfig?.thingspeak_channel_id && !(deviceConfig as any)?.config?.thingspeak_channel_id && analyticsError === "Telemetry configuration missing";
     const isOffline = onlineStatus === 'Offline';
 
     // ── Stale age ─────────────────────────────────────────────────────────────

@@ -13,12 +13,22 @@ import {
   Plus,
   Settings,
   Loader2,
+  Edit2,
 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import { AddDeviceForm } from "../../../components/admin/forms/AddDeviceForm";
+import { AddCustomerForm } from "../../../components/admin/forms/AddCustomerForm";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../components/ToastProvider";
-import { deviceService } from "../../../services/DeviceService";
+import { getCustomerName, getZoneName } from "../../../utils/customerUtils";
+import { db } from "../../../lib/firebase";
+import { 
+  onSnapshot,
+  doc,
+  updateDoc,
+  increment,
+} from "firebase/firestore";
+import { NodeService } from "../../../services/DeviceService";
 
 const CustomerDetails = () => {
   const { customerId } = useParams();
@@ -27,49 +37,86 @@ const CustomerDetails = () => {
   const [nodes, setNodes] = useState<any[]>([]); // Task 7: Real-time Nodes State
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteCustomerModal, setShowDeleteCustomerModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState<any | null>(null);
   const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null); // Task 3: Deletion State
+  const [deviceToggles, setDeviceToggles] = useState<Record<string, boolean>>({});
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  // Fetch Profile Metadata
-  const fetchProfile = async () => {
+  // 1. Real-Time Customer Profile Listener
+  useEffect(() => {
     if (!customerId) return;
+    
     setLoading(true);
-    try {
-        const expandedData = await adminService.getCustomer(customerId);
-        setClient(expandedData);
-    } catch (error) {
-      console.error("Failed to fetch client details:", error);
-      showToast("Error loading customer profile", "error");
-    } finally {
+    console.log("[Firestore] Attaching listener for Customer Doc:", customerId);
+    
+    const unsub = onSnapshot(doc(db, "customers", customerId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setClient({ id: docSnap.id, ...data });
+      } else {
+        console.warn("[Firestore] Customer doc not found:", customerId);
+        showToast("Customer profile not found", "error");
+      }
       setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, [customerId]);
-
-  // Task 7: Real-Time Sync for Nodes via API polling
-  useEffect(() => {
-    if (!customerId) return;
-    
-    // Abstracted away into deviceService which natively polls via Axios
-    const unsub = deviceService.subscribeToNodeUpdates(
-         (nodesData) => setNodes([nodesData]), // Re-structured locally inside deviceService caching mechanics
-         { community_id: "ignore_we_are_fetching_all" }
-    );
-    
-    // To correctly capture all nodes locally:
-    const fetchNodes = async () => {
-         const allNodes = await deviceService.getMapNodes(undefined, customerId);
-         setNodes(allNodes);
-    };
-    fetchNodes();
+    }, (error) => {
+      console.error("[Firestore Customer Listener Error]:", error);
+      showToast("Lost connection to profile", "error");
+      setLoading(false);
+    });
 
     return () => unsub();
   }, [customerId]);
+
+  // 🎯 SINGLE SOURCE OF TRUTH: Real-Time Multi-Doc Device Synchronizer
+  useEffect(() => {
+    const deviceIds = client?.device_ids || [];
+    
+    if (deviceIds.length === 0) {
+      setNodes([]);
+      setDeviceToggles({});
+      return;
+    }
+
+    console.log(`[Firestore] Syncing ${deviceIds.length} assigned devices:`, deviceIds);
+
+    const deviceDataMap: Record<string, any> = {};
+    const unsubs: (() => void)[] = [];
+
+    deviceIds.forEach((id: string) => {
+      const unsub = onSnapshot(doc(db, "devices", id), (docSnap) => {
+        if (docSnap.exists()) {
+          // Normalize and update specific device in our map
+          const mapped = NodeService.mapNodeData({ id: docSnap.id, ...docSnap.data() });
+          deviceDataMap[id] = mapped;
+        } else {
+          // Device might have been deleted, remove it from view
+          delete deviceDataMap[id];
+        }
+
+        // Re-construct the full list for UI
+        const updatedNodes = Object.values(deviceDataMap);
+        setNodes(updatedNodes);
+
+        // Update toggle states reactively
+        const newToggles: Record<string, boolean> = {};
+        updatedNodes.forEach(n => {
+          newToggles[n.id] = !!n.is_active;
+        });
+        setDeviceToggles(newToggles);
+      }, (err) => {
+        console.error(`[Firestore Device Listener Error] ID ${id}:`, err);
+      });
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      console.log(`[Firestore] Detaching ${unsubs.length} device listeners`);
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [client?.device_ids]);
 
   // Task 4: Node Delete Logic
   const handleDeleteDevice = async () => {
@@ -83,6 +130,17 @@ const CustomerDetails = () => {
     } catch (err: any) {
       console.error("Delete failed", err);
       showToast(err.message || "Failed to delete device", "error");
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!customerId) return;
+    try {
+      await adminService.deleteCustomer(customerId);
+      showToast("Customer profile deleted", "success");
+      navigate("/superadmin/customers");
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete customer", "error");
     }
   };
 
@@ -126,37 +184,50 @@ const CustomerDetails = () => {
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-slate-500 mb-4 overflow-hidden">
         <span
-          onClick={() => navigate("/superadmin/zones")}
+          onClick={() => navigate("/superadmin/customers")}
           className="hover:text-blue-600 cursor-pointer shrink-0"
         >
-          Zones
-        </span>
-        <ChevronRight size={14} className="shrink-0" />
-        <span
-          onClick={() => navigate(`/superadmin/zones/${zone?.id}/customers`)}
-          className="hover:text-blue-600 cursor-pointer truncate max-w-[150px]"
-        >
-          {zone?.name || zone?.zoneName || "Zone"}
+          Customers
         </span>
         <ChevronRight size={14} className="shrink-0" />
         <span className="font-bold text-slate-800 truncate">
-          {client?.display_name || client?.full_name || "..."}
+          {getCustomerName(client)}
         </span>
       </div>
 
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">
-            {client?.display_name || client?.full_name || "..."}
+            {getCustomerName(client)}
           </h2>
           <p className="text-slate-500">Customer Profile & Device Management</p>
         </div>
-        <button
-          onClick={() => navigate(`/superadmin/zones/${zone?.id}/customers`)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-white/30 text-sm font-medium"
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
+        
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/superadmin/customers")}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-white/40 text-sm font-bold transition-all active:scale-95"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+          
+          {user?.role === "superadmin" && (
+            <div className="flex items-center gap-2 pl-2 ml-2 border-l border-slate-200">
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-bold transition-all active:scale-95 shadow-sm"
+              >
+                <Edit2 size={16} /> Edit Profile
+              </button>
+              <button
+                onClick={() => setShowDeleteCustomerModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm font-bold transition-all active:scale-95 shadow-lg shadow-red-100"
+              >
+                <Trash2 size={16} /> Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -191,7 +262,7 @@ const CustomerDetails = () => {
                     Phone Number
                   </p>
                   <p className="text-slate-800 font-medium">
-                    {client?.phone || "N/A"}
+                    {client?.phone_number || "N/A"}
                   </p>
                 </div>
               </div>
@@ -205,7 +276,7 @@ const CustomerDetails = () => {
                     Assigned Zone
                   </p>
                   <p className="text-slate-800 font-medium">
-                    {zone?.name || zone?.zoneName || "N/A"}
+                    {getZoneName(zone)}
                   </p>
                   <p className="text-xs text-slate-400">{zone?.state || ""}</p>
                 </div>
@@ -226,6 +297,20 @@ const CustomerDetails = () => {
                   </div>
                 </div>
               )}
+
+              <div className="flex items-start gap-3 mt-6 pt-6 border-t border-slate-100">
+                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                  <Box size={16} />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-bold uppercase">
+                    Asset Portfolio
+                  </p>
+                  <p className="text-slate-800 font-[800]">
+                    {nodes.filter(n => n.is_active).length} Active / {nodes.length} Assigned
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -234,9 +319,14 @@ const CustomerDetails = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="apple-glass-card p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
-                Assigned Devices
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+                  Assigned Devices
+                </h3>
+                <span className="bg-[#0077ff]/10 text-[#0077ff] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {nodes.filter(n => n.is_active).length} Active
+                </span>
+              </div>
               {user?.role === "superadmin" && (
                 <button
                   onClick={() => setShowCreateModal(true)}
@@ -257,13 +347,12 @@ const CustomerDetails = () => {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`p-2 rounded-lg ${
-                          device.analytics_template === "EvaraTank"
+                        className={`p-2 rounded-lg ${device.analytics_template === "EvaraTank"
                             ? "bg-indigo-100 text-indigo-600"
                             : device.analytics_template === "EvaraFlow"
                               ? "bg-cyan-100 text-cyan-600"
                               : "bg-sky-100 text-sky-600"
-                        }`}
+                          }`}
                       >
                         <Box size={20} />
                       </div>
@@ -281,12 +370,11 @@ const CustomerDetails = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <div
-                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-                          device.status === "active" ||
-                          device.status === "Online"
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${device.status === "active" ||
+                            device.status === "Online"
                             ? "bg-green-100 text-green-700 border-green-200"
                             : "bg-slate-200 text-slate-600 border-slate-300"
-                        }`}
+                          }`}
                       >
                         {device.status || "Offline"}
                       </div>
@@ -300,21 +388,78 @@ const CustomerDetails = () => {
                     <span className="font-medium text-slate-700">Recently</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    {/* Task 1: Configure Button */}
+                  <div className="flex items-center justify-between mt-3 w-full">
+                    {/* Configure Button */}
                     <button
-                      onClick={() => setEditingDevice(device)}
-                      className="py-2.5 rounded-xl apple-glass-card border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const isFlow =
+                          (device.analytics_template || '').toLowerCase().includes('flow') ||
+                          (device.device_type || '').toLowerCase().includes('flow') ||
+                          (device.assetType || '').toLowerCase().includes('flow');
+                        navigate(isFlow ? `/configure-flow/${device.id}` : `/configure/${device.id}`);
+                      }}
+                      className="px-4 py-2.5 rounded-xl apple-glass-card border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
                     >
                       <Settings size={14} /> Configure
                     </button>
 
-                    {/* Task 1 & 2: Delete Button */}
+                    {/* Toggle Switch (standalone) */}
                     <button
-                      onClick={() => setDeletingDeviceId(device.id)}
-                      className="py-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 text-[11px] font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                      type="button"
+                      role="switch"
+                      aria-checked={!!deviceToggles[device.id]}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const newValue = !deviceToggles[device.id];
+                        
+                        // 🎯 OPTIMISTIC UI UPDATE
+                        setDeviceToggles(prev => ({ ...prev, [device.id]: newValue }));
+
+                        try {
+                          // 🎯 PERSIST TO FIRESTORE
+                          const nodeRef = doc(db, "devices", device.id);
+                          await updateDoc(nodeRef, {
+                            is_active: newValue,
+                            updated_at: new Date()
+                          });
+
+                          // Also increment/decrement the aggregate counter for the customer list
+                          const customerRef = doc(db, "customers", customerId!);
+                          await updateDoc(customerRef, {
+                            deviceCount: increment(newValue ? 1 : -1)
+                          });
+
+                          showToast(`Device ${newValue ? 'Activated' : 'Deactivated'}`, "success");
+                        } catch (err) {
+                          console.error("Toggle failed:", err);
+                          showToast("Failed to update status", "error");
+                          // Revert on failure
+                          setDeviceToggles(prev => ({ ...prev, [device.id]: !newValue }));
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${deviceToggles[device.id]
+                          ? 'bg-[#0077ff]'
+                          : 'bg-[#e2e8f0]'
+                        }`}
                     >
-                      <Trash2 size={14} /> Delete
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${deviceToggles[device.id]
+                            ? 'translate-x-5'
+                            : 'translate-x-0'
+                          }`}
+                      />
+                    </button>
+
+                    {/* Delete Icon (standalone) */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingDeviceId(device.id);
+                      }}
+                      className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors border border-red-100"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -368,6 +513,64 @@ const CustomerDetails = () => {
         </div>
       </Modal>
 
+      {/* Customer Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteCustomerModal}
+        onClose={() => setShowDeleteCustomerModal(false)}
+        title="Confirm Customer Deletion"
+      >
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 p-4 bg-red-50 rounded-2xl border border-red-100">
+            <div className="p-3 bg-red-100 text-red-600 rounded-xl">
+              <Trash2 size={24} />
+            </div>
+            <div>
+              <h4 className="font-bold text-red-900">Final Deletion Action</h4>
+              <p className="text-xs text-red-700">
+                This will permanently remove the customer profile and all metadata.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-slate-600 text-sm">
+            Are you sure you want to delete **{getCustomerName(client)}**? This action cannot be undone. 
+            All device assignments will be decoupled.
+          </p>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowDeleteCustomerModal(false)}
+              className="flex-1 py-3 px-4 rounded-xl border border-slate-200 font-bold text-slate-600 text-sm hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteCustomer}
+              className="flex-1 py-3 px-4 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+            >
+              Confirm Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Customer Edit Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Customer Profile"
+      >
+        <AddCustomerForm
+          initialData={client}
+          onSubmit={(updated) => {
+            setShowEditModal(false);
+            setClient(updated);
+            // fetchProfile(); // REMOVED: onSnapshot handles updates 
+          }}
+          onCancel={() => setShowEditModal(false)}
+        />
+      </Modal>
+
       {/* Create/Edit Device Modal */}
       <Modal
         isOpen={showCreateModal || !!editingDevice}
@@ -393,20 +596,20 @@ const CustomerDetails = () => {
           initialData={
             editingDevice
               ? {
-                  ...editingDevice,
-                  name: editingDevice.label || editingDevice.displayName,
-                   customer_id: client?.id,
-                   regionFilter: zone?.id,
-                   ...(editingDevice.metadata?.thingspeak || {}),
-                  ...(editingDevice.metadata?.config_tank || {}),
-                  ...(editingDevice.metadata?.config_deep || {}),
-                  ...(editingDevice.metadata?.config_flow || {}),
-                }
+                ...editingDevice,
+                name: editingDevice.label || editingDevice.displayName,
+                customer_id: client?.id,
+                regionFilter: zone?.id,
+                ...(editingDevice.metadata?.thingspeak || {}),
+                ...(editingDevice.metadata?.config_tank || {}),
+                ...(editingDevice.metadata?.config_deep || {}),
+                ...(editingDevice.metadata?.config_flow || {}),
+              }
               : {
-                  customer_id: client?.id,
-                  community_id: shadowCommunity?.id,
-                  regionFilter: zone?.id,
-                }
+                customer_id: client?.id,
+                community_id: shadowCommunity?.id,
+                regionFilter: zone?.id,
+              }
           }
         />
       </Modal>

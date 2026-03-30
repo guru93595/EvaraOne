@@ -77,12 +77,37 @@ async function recalculateAllDevicesStatus() {
         
         // Only update if status changed (reduce DB writes)
         if (currentStatus !== desiredStatus) {
+          const snapshot = meta.telemetry_snapshot || {};
+          snapshot.status = desiredStatus;
+          snapshot.timestamp = lastUpdatedAt;
+
+          // 1. Update metadata collection (evaratank/evaraflow/...)
           updates.push(
             db.collection(type.toLowerCase()).doc(deviceId).update({
               status: desiredStatus,
-              statusLastChecked: now.toISOString()
+              statusLastChecked: now.toISOString(),
+              telemetry_snapshot: snapshot
             })
           );
+
+          // 2. SaaS DUAL-SYNC: Update Global Registry ('devices' collection)
+          const registryUpdate = {
+            status: desiredStatus,
+            last_seen: lastUpdatedAt,
+            last_online_at: admin.firestore.FieldValue.serverTimestamp(),
+            telemetry_snapshot: snapshot
+          };
+
+          // If it's HIMALAYA, ensure its type is corrected to evaraflow during sync
+          if (deviceId === 'HIMALAYA' || deviceId === 'HIMALAYA 2') {
+            registryUpdate.device_type = 'evaraflow';
+            registryUpdate.analytics_template = 'EvaraFlow';
+          }
+
+          updates.push(
+            db.collection("devices").doc(deviceId).update(registryUpdate)
+          );
+
           statusChanges++;
         
           console.log(

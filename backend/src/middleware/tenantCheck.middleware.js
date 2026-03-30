@@ -9,8 +9,8 @@ const tenantCheck = (req, res, next) => {
     }
 
     // Resolve the virtual tenant ID for the current user session
-    // This provides a foundation for future true multi-tenancy migrations
-    const tenantId = req.user.community_id || req.user.customer_id || req.user.uid;
+    // Standardize to use both variants for robustness
+    const tenantId = req.user.community_id || req.user.communityId || req.user.customer_id || req.user.customerId || req.user.uid;
     req.tenant_id = tenantId;
 
     // Secure payload injection prevention:

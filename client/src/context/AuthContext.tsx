@@ -13,7 +13,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import type { User as FirebaseUser } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
 export type UserRole = "superadmin" | "community_admin" | "customer";
@@ -26,6 +26,7 @@ export interface User {
   role: UserRole;
   plan: UserPlan;
   community_id?: string;
+  resolved_customer_id?: string;
 }
 
 interface AuthContextType {
@@ -80,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         role,
         plan: (profile?.plan as UserPlan) || "pro",
         community_id: profile?.community_id,
+        resolved_customer_id: profile?.id || profile?.customer_id || profile?.customerId || firebaseUser.uid,
       };
     },
     [],
@@ -97,8 +99,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         } else {
           const customerRef = doc(db, "customers", firebaseUser.uid);
           const customerSnap = await getDoc(customerRef);
+          
           if (customerSnap.exists()) {
-            profileData = customerSnap.data();
+            profileData = { id: customerSnap.id, ...customerSnap.data() };
+          } else {
+            // 🎯 FALLBACK: Resolve by Email for legacy random-ID customers (like Kaustubh)
+            console.log(`[AuthContext] UID doc not found for ${firebaseUser.email}. Attempting email resolution...`);
+            const q = query(collection(db, "customers"), where("email", "==", firebaseUser.email));
+            const querySnap = await getDocs(q);
+            if (!querySnap.empty) {
+              const legacyDoc = querySnap.docs[0];
+              profileData = { id: legacyDoc.id, ...legacyDoc.data() };
+              console.log(`[AuthContext] Resolved legacy customer ID: ${legacyDoc.id}`);
+            }
           }
         }
 

@@ -72,8 +72,8 @@ const requireAuth = async (req, res, next) => {
             ...decodedToken,
             role: role,
             display_name: userData.display_name || userData.full_name || decodedToken.name,
-            community_id: userData.community_id || "",
-            customer_id: userData.customer_id || userData.id || "" // Robust fallback to doc.id
+            community_id: userData.community_id || userData.communityId || "",
+            customer_id: userData.customer_id || userData.customerId || userData.id || "" // Robust fallback to doc.id
         };
 
         next();
@@ -100,19 +100,22 @@ async function checkOwnership(uid, deviceId, role = "customer", communityId = ""
         if (cachedOwner === uid || (communityId && cachedOwner === communityId)) return true;
 
         // 2. Fetch Registry (1 read per cache miss)
-        const registry = await db.collection("devices").doc(deviceId).get();
-        if (!registry.exists) return false;
+        const registryDoc = await db.collection("devices").doc(deviceId).get();
+        if (!registryDoc.exists) return false;
 
-        const type = registry.data().device_type;
+        const registryData = registryDoc.data();
+        const type = registryData.device_type;
         if (!type) return false;
 
         // 3. Check Metadata Collection (1 read per cache miss)
-        const meta = await db.collection(type.toLowerCase()).doc(deviceId).get();
-        if (!meta.exists) return false;
+        const metaDoc = await db.collection(type.toLowerCase()).doc(deviceId).get();
+        const metaData = metaDoc.exists ? metaDoc.data() : {};
 
-        const data = meta.data();
-        const ownerId = data.customer_id;
-        const deviceCommunityId = data.community_id;
+        // 4. Consolidate Ownership Info (handle both snake_case and camelCase)
+        const ownerId = registryData.customer_id || registryData.customerId || 
+                        metaData.customer_id || metaData.customerId;
+        const deviceCommunityId = registryData.community_id || registryData.communityId || 
+                                  metaData.community_id || metaData.communityId;
         
         // Caching: Store the primary ownerId or communityId in Redis for 4 hours
         if (ownerId || deviceCommunityId) {

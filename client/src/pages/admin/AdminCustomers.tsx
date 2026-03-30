@@ -1,42 +1,69 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { adminService } from "../../services/admin";
-import { User, Search, MapPin, Filter, Plus } from "lucide-react";
+import { User, Search, MapPin, Plus, X } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { AddCustomerForm } from "../../components/admin/forms/AddCustomerForm";
+import { db } from "../../lib/firebase";
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  orderBy 
+} from "firebase/firestore";
+import type { 
+  Customer as UserProfileRow, 
+  Zone as RegionRow 
+} from "../../types/entities";
 
 const AdminCustomers = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialZoneId = searchParams.get("zoneId");
+
   const { user } = useAuth();
   const [search, setSearch] = useState("");
-  const [clients, setClients] = useState<any[]>([]);
-
-  const [zones, setZones] = useState<any[]>([]);
+  const [zoneFilter, setZoneFilter] = useState(initialZoneId || "all");
+  
+  const [clients, setClients] = useState<UserProfileRow[]>([]);
+  const [zones, setZones] = useState<RegionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const fetchClients = async () => {
-    try {
-      const [custData, zoneData] = await Promise.all([
-        adminService.getCustomers(),
-        adminService.getRegions(),
-      ]);
-      setClients(Array.isArray(custData) ? custData : []);
-      setZones(Array.isArray(zoneData) ? zoneData : []);
-    } catch (error) {
-      console.error("Failed to fetch clients or hierarchy:", error);
-      setClients([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // 1. Real-Time Customers Sync
   useEffect(() => {
-    fetchClients();
+    const q = query(collection(db, "customers"), orderBy("full_name", "asc"));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as UserProfileRow[];
+      setClients(data);
+      setLoading(false);
+    }, (err) => {
+      console.error("Customers listener failed:", err);
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
 
+  // 2. Real-Time Zones Sync (for filter dropdown)
+  useEffect(() => {
+    const q = query(collection(db, "zones"), orderBy("zoneName", "asc"));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as RegionRow[];
+      setZones(data);
+    }, (err) => {
+      console.error("Zones listener failed:", err);
+    });
+    return () => unsub();
+  }, []);
 
+  // Update URL when filter changes
+  useEffect(() => {
+    if (zoneFilter && zoneFilter !== "all") {
+      setSearchParams({ zoneId: zoneFilter });
+    } else {
+      setSearchParams({});
+    }
+  }, [zoneFilter]);
 
   const zoneMap = useMemo(
     () => Object.fromEntries(zones.map((z) => [z.id, z])),
@@ -46,10 +73,9 @@ const AdminCustomers = () => {
   const filteredClients = clients.filter((c) => {
     const name = (c.display_name || c.full_name || "").toLowerCase();
     const email = (c.email || "").toLowerCase();
-    return (
-      name.includes(search.toLowerCase()) ||
-      email.includes(search.toLowerCase())
-    );
+    const matchesSearch = name.includes(search.toLowerCase()) || email.includes(search.toLowerCase());
+    const matchesZone = zoneFilter === "all" || c.zone_id === zoneFilter || c.regionFilter === zoneFilter;
+    return matchesSearch && matchesZone;
   });
 
 
@@ -79,9 +105,27 @@ const AdminCustomers = () => {
               className="pl-10 pr-4 py-2 bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.4)] rounded-xl text-sm focus:ring-2 focus:ring-[rgba(58,122,254,0.3)] focus:border-[#3A7AFE] outline-none w-64 shadow-sm text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-40 transition-all"
             />
           </div>
-          <button className="p-2 bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.4)] rounded-xl text-[#1F2937] opacity-80 hover:bg-[rgba(255,255,255,0.5)] shadow-sm transition-all">
-            <Filter size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              value={zoneFilter}
+              onChange={(e) => setZoneFilter(e.target.value)}
+              className="px-4 py-2 bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.4)] rounded-xl text-sm text-[#1F2937] outline-none shadow-sm focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="all">All Zones</option>
+              {zones.map(z => (
+                <option key={z.id} value={z.id}>{z.zoneName}</option>
+              ))}
+            </select>
+            {zoneFilter !== "all" && (
+              <button 
+                onClick={() => setZoneFilter("all")}
+                className="p-2 bg-red-50 text-red-500 rounded-xl border border-red-100 font-bold hover:bg-red-100 transition-all"
+                title="Clear Filter"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
           {user?.role === "superadmin" && (
             <button
               onClick={() => setShowAddModal(true)}
@@ -131,7 +175,7 @@ const AdminCustomers = () => {
                       <MapPin size={14} className="text-[#1F2937] opacity-50" />
                       <div>
                         <span className="text-[#1F2937] font-[500]">
-                          {zoneMap[client.zone_id || client.regionFilter]?.zoneName || "No Zone Assigned"}
+                          {client.zone_id ? (zoneMap as any)[client.zone_id]?.zoneName : "No Zone Assigned"}
                         </span>
                       </div>
                     </div>
@@ -141,16 +185,22 @@ const AdminCustomers = () => {
                       <p className="font-[500] opacity-90">
                         {client.email || "—"}
                       </p>
-                      <p className="opacity-60">{client.phone || "N/A"}</p>
+                      <p className="opacity-60">{client.phone_number || "N/A"}</p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-[13px] font-[600] text-[#1F2937] bg-[rgba(255,255,255,0.4)] border border-[rgba(255,255,255,0.5)] px-2.5 py-1 rounded-[8px] shadow-sm">
-                      {client.devices?.length || 0}
+                      {client.deviceCount || 0} / {client.device_ids?.length || 0}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="text-[12px] font-[600] text-[#3A7AFE] border border-[rgba(58,122,254,0.3)] bg-[rgba(58,122,254,0.1)] px-3 py-1.5 rounded-[8px] opacity-0 group-hover:opacity-100 transition-all shadow-sm">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/superadmin/customers/${client.id}`);
+                      }}
+                      className="text-[12px] font-[700] text-[#3A7AFE] border border-[rgba(58,122,254,0.3)] bg-[rgba(58,122,254,0.1)] px-4 py-2 rounded-[10px] hover:bg-[rgba(58,122,254,0.15)] hover:shadow-md transition-all shadow-sm"
+                    >
                       Manage Profile
                     </button>
                   </td>
@@ -179,7 +229,6 @@ const AdminCustomers = () => {
         <AddCustomerForm
           onSubmit={() => {
             setShowAddModal(false);
-            fetchClients();
           }}
           onCancel={() => setShowAddModal(false)}
         />
