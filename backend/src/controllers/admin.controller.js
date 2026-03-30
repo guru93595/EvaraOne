@@ -110,7 +110,8 @@ exports.deleteZone = async (req, res) => {
 // Customers
 exports.createCustomer = async (req, res) => {
     try {
-        const customer = { ...req.body, created_at: new Date() };
+        const { confirmPassword, ...customerData } = req.body;
+        const customer = { ...customerData, created_at: new Date() };
         const doc = await db.collection("customers").add(customer);
         await cache.flushPrefix("customers_");
         await cache.flushPrefix("admin_hierarchy");
@@ -124,37 +125,85 @@ exports.createCustomer = async (req, res) => {
 
 exports.getCustomers = async (req, res) => {
     try {
-        const cacheKey = req.user.role === "superadmin" ? "user:admin:customers" : `user:${req.user.uid}:customers`;
+        const { zone_id, community_id, regionFilter, limit, cursor } = req.query;
+        
+        const cacheParams = [
+            req.user.role,
+            zone_id || 'all',
+            community_id || 'all',
+            regionFilter || 'all',
+            limit || '50',
+            cursor || 'none'
+        ].join(':');
+        
+        const cacheKey = req.user.role === "superadmin" ? `user:admin:customers:${cacheParams}` : `user:${req.user.uid}:customers:${cacheParams}`;
         const cached = await cache.get(cacheKey);
         if (cached) return res.status(200).json(cached);
 
-        const limitStr = parseInt(req.query.limit) || 50;
+        const limitStr = parseInt(limit) || 50;
         let query = db.collection("customers");
         
+        console.log(`[AdminController] getCustomers query:`, { zone_id, community_id, role: req.user.role });
+
         if (req.user.role !== "superadmin") {
             query = query.where("id", "==", req.user.customer_id || req.user.uid);
-        } else if (req.query.community_id) {
-            query = query.where("community_id", "==", req.query.community_id);
         } else {
-            query = query.orderBy("created_at");
+            // REMOVED orderBy("created_at") to avoid complex index requirements that cause silent failures
+            
+            if (zone_id && zone_id.trim() !== '') {
+                // Primary Filter
+                query = query.where("zone_id", "==", zone_id.trim());
+            } else if (regionFilter && regionFilter.trim() !== '') {
+                query = query.where("regionFilter", "==", regionFilter.trim());
+            } else if (community_id && community_id.trim() !== '') {
+                query = query.where("community_id", "==", community_id.trim());
+            }
         }
         
         query = query.limit(limitStr);
 
-        if (req.query.cursor) {
-            const cursorDoc = await db.collection("customers").doc(req.query.cursor).get();
+        if (cursor) {
+            const cursorDoc = await db.collection("customers").doc(cursor).get();
             if(cursorDoc.exists) {
                 query = query.startAfter(cursorDoc);
             }
         }
 
         const snapshot = await query.get();
-        const customers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let customers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // COMPREHENSIVE FALLBACK: Check alternative field names (zoneId, regionFilter) if no results for zone_id
+        if (req.user.role === "superadmin" && zone_id && customers.length === 0) {
+            console.log(`[AdminController] No customers found for zone_id: ${zone_id}, trying fallbacks...`);
+            
+            // Try zoneId (camelCase)
+            const zoneIdSnapshot = await db.collection("customers").where("zoneId", "==", zone_id.trim()).limit(limitStr).get();
+            if (!zoneIdSnapshot.empty) {
+                console.log(`[AdminController] Found ${zoneIdSnapshot.size} customers via zoneId fallback`);
+                customers = [...customers, ...zoneIdSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))];
+            }
+
+            // Try regionFilter (legacy)
+            const regionSnapshot = await db.collection("customers").where("regionFilter", "==", zone_id.trim()).limit(limitStr).get();
+            if (!regionSnapshot.empty) {
+                console.log(`[AdminController] Found ${regionSnapshot.size} customers via regionFilter fallback`);
+                // Deduplicate by ID
+                const existingIds = new Set(customers.map(c => c.id));
+                regionSnapshot.docs.forEach(doc => {
+                    if (!existingIds.has(doc.id)) {
+                        customers.push({ id: doc.id, ...doc.data() });
+                        existingIds.add(doc.id);
+                    }
+                });
+            }
+        }
+
+        console.log(`[AdminController] Successfully fetched ${customers.length} customers`);
         await cache.set(cacheKey, customers, 600); // 10 min
         res.status(200).json(customers);
     } catch (error) {
-        console.error("Failed to get customers", error);
-        res.status(500).json({ error: "Failed to get customers" });
+        console.error("[AdminController] getCustomers CRITICAL ERROR:", error);
+        res.status(500).json({ error: "Failed to get customers", details: error.message });
     }
 };
 
@@ -188,89 +237,6 @@ exports.deleteCustomer = async (req, res) => {
     }
 };
 
-// Communities
-exports.createCommunity = async (req, res) => {
-    try {
-        const community = { ...req.body, created_at: new Date() };
-        const doc = await db.collection("communities").add(community);
-        await cache.flushPrefix("communities_");
-        await cache.flushPrefix("admin_hierarchy");
-        await cache.flushPrefix("dashboard_summary_");
-        res.status(201).json({ success: true, id: doc.id, message: "Community created successfully" });
-    } catch (error) {
-        console.error("Failed to create community", error);
-        res.status(500).json({ error: "Failed to create community", details: error.message });
-    }
-};
-
-exports.getCommunities = async (req, res) => {
-    try {
-        const cacheKey = `communities_${req.query.zone_id || req.query.region_id || 'all'}`;
-        const cached = await cache.get(cacheKey);
-        if (cached) return res.status(200).json(cached);
-
-        const limitStr = parseInt(req.query.limit) || 50;
-        let query = db.collection("communities");
-        
-        const zoneFilterId = req.query.zone_id || req.query.region_id;
-
-        if (zoneFilterId) {
-            query = query.where("zone_id", "==", zoneFilterId);
-        } else if (req.user.role !== "superadmin") {
-        } else {
-            query = query.orderBy("created_at");
-        }
-        
-        query = query.limit(limitStr);
-
-        if (req.query.cursor) {
-            const cursorDoc = await db.collection("communities").doc(req.query.cursor).get();
-            if(cursorDoc.exists) {
-                query = query.startAfter(cursorDoc);
-            }
-        }
-
-        const snapshot = await query.get();
-        const communities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        await cache.set(cacheKey, communities, 600); // 10 min
-        res.status(200).json(communities);
-    } catch (error) {
-        console.error("Failed to get communities", error);
-        res.status(500).json({ error: "Failed to get communities" });
-    }
-};
-
-exports.getCommunityById = async (req, res) => {
-    try {
-        const doc = await db.collection("communities").doc(req.params.id).get();
-        if (!doc.exists) return res.status(404).json({ error: "Community not found" });
-        res.status(200).json({ id: doc.id, ...doc.data() });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to get community" });
-    }
-};
-
-exports.updateCommunity = async (req, res) => {
-    try {
-        await db.collection("communities").doc(req.params.id).update(req.body);
-        await cache.flushPrefix("communities_");
-        res.status(200).json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to update community" });
-    }
-};
-
-exports.deleteCommunity = async (req, res) => {
-    try {
-        await db.collection("communities").doc(req.params.id).delete();
-        await cache.flushPrefix("communities_");
-        await cache.flushPrefix("dashboard_summary_");
-        res.status(200).json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to delete community" });
-    }
-};
-
 // Nodes (Registry + Metadata Architecture)
 exports.createNode = async (req, res) => {
     try {
@@ -279,7 +245,6 @@ exports.createNode = async (req, res) => {
             deviceName,
             assetType,
             zoneId,
-            communityId,
             customerId,
             thingspeakChannelId,
             thingspeakReadKey,
@@ -309,8 +274,7 @@ exports.createNode = async (req, res) => {
             device_id: idForDevice,
             device_type: typeNormalized,
             node_id: idForDevice,
-            customer_id: customerId || "",
-            community_id: communityId || ""
+            customer_id: customerId || ""
         };
 
         const deviceRef = await db.collection("devices").add(registryData);
@@ -325,7 +289,6 @@ exports.createNode = async (req, res) => {
             thingspeak_read_api_key: thingspeakReadKey || "",
             thingspeak_channel_id: thingspeakChannelId || "",
             customer_id: customerId || "",
-            community_id: communityId || "",
             zone_id: zoneId || "",
             latitude: parseFloat(latitude) || null,
             longitude: parseFloat(longitude) || null,
@@ -356,7 +319,7 @@ exports.createNode = async (req, res) => {
             metadata.sensor_field_mapping = { [field]: "water_level_in_cm" };
         } else if (typeNormalized === "evaraflow" || typeNormalized === "flow" || assetType === "EvaraFlow") {
             targetCol = "evaraflow";
-            metadata.configuration = {}; // No physical dimensions needed
+            metadata.configuration = {};
             const rateField = flowRateField || "field2";
             const readingField = meterReadingField || "field1";
             metadata.sensor_field_mapping = { 
@@ -402,16 +365,7 @@ exports.getNodes = async (req, res) => {
         let query = db.collection("devices");
         
         if (req.user.role !== "superadmin") {
-            if (req.user.community_id && req.user.customer_id) {
-                query = query.where(
-                    Filter.or(
-                        Filter.where("customer_id", "==", req.user.customer_id),
-                        Filter.where("community_id", "==", req.user.community_id)
-                    )
-                );
-            } else {
-                query = query.where("customer_id", "==", req.user.customer_id || req.user.uid);
-            }
+            query = query.where("customer_id", "==", req.user.customer_id || req.user.uid);
         }
         
         const snapshot = await query.limit(limitStr).get();
@@ -443,9 +397,7 @@ exports.getNodes = async (req, res) => {
         for (const batch of typeBatches) {
             for (const item of batch) {
                 const { id, meta } = item;
-                // Filter by customer if not superadmin (Allow direct ownership OR community-based access)
-                const isOwner = meta.customer_id === req.user.uid || (req.user.community_id && meta.community_id === req.user.community_id);
-                if (req.user.role !== "superadmin" && !isOwner) continue;
+                if (req.user.role !== "superadmin" && meta.customer_id !== req.user.uid) continue;
 
                 const { thingspeak_read_api_key, ...safeMeta } = meta;
                 devices.push({ 
@@ -511,13 +463,6 @@ exports.updateNode = async (req, res) => {
             metaUpdate.customer_id = cid;
             // Also sync to registry
             await db.collection("devices").doc(deviceDoc.id).update({ customer_id: cid });
-        }
-
-        if (body.communityId || body.community_id) {
-            const commId = trimmed(body.communityId || body.community_id);
-            metaUpdate.community_id = commId;
-            // Also sync to registry
-            await db.collection("devices").doc(deviceDoc.id).update({ community_id: commId });
         }
         
         if (body.latitude !== undefined) metaUpdate.latitude = parseFloat(body.latitude);
@@ -611,14 +556,17 @@ exports.updateNode = async (req, res) => {
 
 exports.deleteNode = async (req, res) => {
     try {
-        const deviceDoc = await db.collection("devices").doc(req.params.id).get();
-        if (!deviceDoc.exists) return res.status(404).json({ error: "Device not found" });
-        
+        // Resolve node by doc id or hardware id (node_id/device_id)
+        const deviceDoc = await resolveDevice(req.params.id);
+        if (!deviceDoc || !deviceDoc.exists) return res.status(404).json({ error: "Device not found" });
+
+        const deviceId = deviceDoc.id;
         const type = (deviceDoc.data().device_type || "").toLowerCase();
+
         const batch = db.batch();
-        batch.delete(db.collection("devices").doc(req.params.id));
+        batch.delete(db.collection("devices").doc(deviceId));
         if (type) {
-            batch.delete(db.collection(type).doc(req.params.id));
+            batch.delete(db.collection(type).doc(deviceId));
         }
 
         await batch.commit();
@@ -631,12 +579,20 @@ exports.deleteNode = async (req, res) => {
             cache.flushPrefix("dashboard_summary_")
         ]);
         if (typeof telemetryCache !== 'undefined') {
-             telemetryCache.del(`telemetry_${req.params.id}`); 
-             telemetryCache.del(`status_${req.params.id}`);
+             telemetryCache.del(`telemetry_${deviceId}`);
+             telemetryCache.del(`status_${deviceId}`);
+        }
+
+        // Remove any remaining cached polling list to ensure deleted device no longer polled
+        try {
+            await cache.del("nodes:polling:list");
+        } catch (err) {
+            // ignore cache delete errors
         }
 
         res.status(200).json({ success: true });
     } catch (error) {
+        console.error("[AdminController] deleteNode error:", error);
         res.status(500).json({ error: "Failed to delete device" });
     }
 };
@@ -647,22 +603,20 @@ exports.getDashboardSummary = async (req, res) => {
             return res.status(401).json({ error: "Unauthorized: Missing user information" });
         }
         const isSuperAdmin = req.user.role === "superadmin";
-        const cacheKey = `user:${isSuperAdmin ? 'admin' : req.user.customer_id || req.user.uid}:summary`;
-        const cached = await cache.get(cacheKey);
-        if (cached) return res.status(200).json(cached);
+        
+        // Disable cache for real-time accuracy
+        // const cacheKey = `user:${isSuperAdmin ? 'admin' : req.user.customer_id || req.user.uid}:summary`;
+        // const cached = await cache.get(cacheKey);
+        // if (cached) return res.status(200).json(cached);
         
         let nodesQuery = db.collection("devices");
         let customersQuery = db.collection("customers");
-        let communitiesQuery = db.collection("communities");
         let zonesQuery = db.collection("zones");
  
         if (!isSuperAdmin) {
             if (req.user.community_id && req.user.customer_id) {
                 nodesQuery = nodesQuery.where(
-                    Filter.or(
-                        Filter.where("customer_id", "==", req.user.customer_id),
-                        Filter.where("community_id", "==", req.user.community_id)
-                    )
+                    Filter.where("customer_id", "==", req.user.customer_id)
                 );
             } else {
                 nodesQuery = nodesQuery.where("customer_id", "==", req.user.customer_id || req.user.uid);
@@ -671,27 +625,40 @@ exports.getDashboardSummary = async (req, res) => {
             customersQuery = customersQuery.where("id", "==", req.user.customer_id || req.user.uid); 
         }
 
-        const [nodesSnap, customersSnap, communitiesSnap, zonesSnap] = await Promise.all([
-            nodesQuery.count().get(),
+        // Get actual device count directly from DB
+        const devicesSnapshot = await nodesQuery.get();
+        const actualNodeCount = devicesSnapshot.size;
+        
+        console.log(`[Dashboard] Real-time node count: ${actualNodeCount}`);
+
+        const [customersSnap, zonesSnap] = await Promise.all([
             customersQuery.count().get(),
-            communitiesQuery.count().get(),
             zonesQuery.count().get()
         ]);
 
-        const totalNodes = nodesSnap.data().count;
         const totalCustomers = customersSnap.data().count;
 
+        // Calculate online nodes from actual devices
+        const onlineNodes = devicesSnapshot.docs.filter(doc => {
+            const device = doc.data();
+            return device.status === 'ONLINE' || device.status === 'Online';
+        }).length;
+
+        const totalZones = zonesSnap.data().count;
+
         const result = {
-            total_nodes: totalNodes,
-            total_communities: isSuperAdmin ? communitiesSnap.data().count : 1,
+            total_nodes: actualNodeCount,
             total_customers: totalCustomers,
-            total_zones: isSuperAdmin ? zonesSnap.data().count : 1,
-            online_nodes: totalNodes,
+            total_zones: totalZones,
+            online_nodes: onlineNodes,
             alerts_active: 0,
-            system_health: 100
+            system_health: actualNodeCount > 0 ? 92 : 0
         };
 
-        await cache.set(cacheKey, result, 180); // 3 min
+        console.log(`[Dashboard] Returning stats:`, result);
+
+        // Cache disabled for real-time accuracy
+        // await cache.set(cacheKey, result, 180);
         res.status(200).json(result);
     } catch (error) {
         console.error("[Dashboard] Failed to get summary:", error.message);
@@ -705,31 +672,23 @@ exports.getHierarchy = async (req, res) => {
         const cached = await cache.get(cacheKey);
         if (cached) return res.status(200).json(cached);
 
-        const [zonesSnap, communitiesSnap, customersSnap] = await Promise.all([
+        const [zonesSnap, customersSnap] = await Promise.all([
             db.collection("zones").get(),
-            db.collection("communities").get(),
             db.collection("customers").get()
         ]);
 
-        const zones = zonesSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), communities: [] }));
-        const communities = communitiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), customers: [] }));
+        const zones = zonesSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), customers: [] }));
         const customers = customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Map customers to communities
-        const communityMap = {};
-        communities.forEach(c => communityMap[c.id] = c);
-        customers.forEach(cust => {
-            if (cust.community_id && communityMap[cust.community_id]) {
-                communityMap[cust.community_id].customers.push(cust);
-            }
-        });
-
-        // Map communities to zones
+        // Link customers directly to zones (skipping communities)
         const zoneMap = {};
         zones.forEach(z => zoneMap[z.id] = z);
-        communities.forEach(c => {
-            if (c.zone_id && zoneMap[c.zone_id]) {
-                zoneMap[c.zone_id].communities.push(c);
+        customers.forEach(cust => {
+            if (cust.zone_id && zoneMap[cust.zone_id]) {
+                zoneMap[cust.zone_id].customers.push(cust);
+            } else if (cust.regionFilter && zoneMap[cust.regionFilter]) {
+                // Support legacy field if present
+                zoneMap[cust.regionFilter].customers.push(cust);
             }
         });
 
@@ -746,6 +705,68 @@ exports.getAuditLogs = async (req, res) => {
         res.status(200).json([]);
     } catch (error) {
         res.status(500).json({ error: "Failed to get audit logs" });
+    }
+};
+
+/**
+ * Get statistics for all zones including customer and device counts
+ */
+exports.getZoneStats = async (req, res) => {
+    try {
+        const cacheKey = "zone_stats_all";
+        const cached = await cache.get(cacheKey);
+        if (cached) return res.status(200).json(cached);
+
+        // Fetch all zones, customers, and devices in parallel
+        const [zonesSnap, customersSnap, devicesSnap] = await Promise.all([
+            db.collection("zones").get(),
+            db.collection("customers").get(),
+            db.collection("devices").get()
+        ]);
+
+        const zones = zonesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const customers = customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const devices = devicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Calculate stats per zone
+        const zoneStats = zones.map(zone => {
+            // Count customers linked to this zone (check zone_id, zoneId, and regionFilter)
+            const zoneCustomers = customers.filter(c => 
+                c.zone_id === zone.id || 
+                c.zoneId === zone.id || 
+                c.regionFilter === zone.id
+            );
+
+            // Get customer IDs for device filtering
+            const zoneCustomerIds = new Set(zoneCustomers.map(c => c.id));
+
+            // Count devices belonging to customers in this zone
+            const zoneDevices = devices.filter(d => 
+                zoneCustomerIds.has(d.customer_id) || 
+                d.zone_id === zone.id ||
+                d.zoneId === zone.id
+            );
+
+            const onlineDevices = zoneDevices.filter(d => 
+                d.status === 'ONLINE' || d.status === 'Online'
+            ).length;
+
+            return {
+                zone_id: zone.id,
+                region_name: zone.zoneName || "Unnamed Zone",
+                state: zone.state || "",
+                customer_count: zoneCustomers.length,
+                device_count: zoneDevices.length,
+                online_devices: onlineDevices,
+                offline_devices: zoneDevices.length - onlineDevices
+            };
+        });
+
+        await cache.set(cacheKey, zoneStats, 300); // 5 min cache
+        res.status(200).json(zoneStats);
+    } catch (error) {
+        console.error("[AdminController] getZoneStats error:", error);
+        res.status(500).json({ error: "Failed to get zone statistics", details: error.message });
     }
 };
 

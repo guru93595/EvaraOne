@@ -14,11 +14,12 @@ import { createPortal } from "react-dom";
 import {
   type MapDevice,
 } from "../../services/DeviceService";
-import { useRealtimeTelemetry } from "../../hooks/useRealtimeTelemetry";
 import type { MapPipeline } from "../../hooks/useMapPipelines";
+import { computeDeviceStatus } from "../../services/DeviceService";
+import { getTankLevel } from "../../utils/telemetryPipeline";
 import { socket } from "../../services/api";
 import { getDeviceAnalyticsRoute } from "../../utils/deviceRouting";
-import { computeOnlineStatus } from "../../utils/telemetryPipeline";
+import { useTelemetry } from "../../hooks/useTelemetry";
 import clsx from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -115,23 +116,7 @@ const MiniTelemetryViz = ({ device, snap }: { device: MapDevice; snap: any }) =>
 
   // If it's a tank but no telemetry, show a "Syncing" liquid bar at 0% or placeholder
   if (t === "evaratank" || t === "oht" || t === "sump" || device.asset_type === "tank" || device.asset_type === "sump") {
-    // Try to get percentage directly, or calculate from raw sensor reading if available
-    let pct = snap?.level_percentage ?? 0;
-
-    // Fallback calculation for raw socket data
-    if (snap && pct === 0 && !snap.level_percentage) {
-      const mapping = (device as any).sensor_field_mapping || {};
-      const fieldKey = Object.keys(mapping).find(k => mapping[k].includes("water_level")) ||
-        (snap.field1 !== undefined ? "field1" : "field2");
-      const distance = parseFloat(snap[fieldKey]);
-      const depth = (device as any).configuration?.depth || (device as any).tank_size || 1.2;
-
-      if (!isNaN(distance) && depth > 0) {
-        const validDistance = Math.min(distance / 100, depth);
-        const waterHeight = Math.max(0, depth - validDistance);
-        pct = Math.min(100, (waterHeight / depth) * 100);
-      }
-    }
+    const pct = getTankLevel(device, snap);
 
     const isSyncing = !snap;
     const barColor = pct > 60 ? "#22c55e" : pct > 30 ? "#f59e0b" : "#ef4444";
@@ -332,14 +317,14 @@ const DeviceHoverPanel = ({
   onNavigate: (r: string) => void;
   isRightPanelOpen?: boolean;
 }) => {
-  const { telemetry: snap } = useRealtimeTelemetry(device.id);
+  const { data: snap } = useTelemetry(device.id);
 
   const t =
     ((device as any).analytics_template || device.asset_type || "Sensor Node").toLowerCase();
 
   // Real-time status detection based on active WebSocket snap or fallback to device API status
   const computedStatus = snap
-    ? computeOnlineStatus(snap.timestamp || snap.created_at || snap.last_seen, device.id)
+    ? computeDeviceStatus(snap.timestamp)
     : device.status;
   const isOnline = computedStatus === "Online";
 
@@ -533,17 +518,20 @@ const SharedMap = ({
   const navigate = useNavigate();
 
   // SaaS Architecture: Real-time Marker Status Sync
-  // This allows markers to turn green the MOMENT data hits our system via WebSockets,
-  // even before the 15-second polling loop finishes.
+  // Listen to BOTH room-based and global broadcast events
   useEffect(() => {
     const handleUpdate = (data: any) => {
       const id = data.device_id || data.node_id;
       if (!id) return;
-      const status = computeOnlineStatus(data.timestamp || data.created_at || data.last_seen, id);
+      const status = computeDeviceStatus(data.timestamp || data.created_at || data.last_seen);
       setRealtimeStatuses(prev => ({ ...prev, [id]: status }));
     };
     socket.on("telemetry_update", handleUpdate);
-    return () => { socket.off("telemetry_update", handleUpdate); };
+    socket.on("telemetry_broadcast", handleUpdate);
+    return () => {
+      socket.off("telemetry_update", handleUpdate);
+      socket.off("telemetry_broadcast", handleUpdate);
+    };
   }, []);
 
   const filteredDevices = useMemo(
@@ -571,7 +559,12 @@ const SharedMap = ({
     const m = new Map<string, L.Icon | L.DivIcon>();
     for (const d of filteredDevices) {
       const t = (d as any).analytics_template || d.asset_type || "";
-      const s = realtimeStatuses[d.id] || d.status || "Offline";
+      
+      // FIX: Use computeDeviceStatus on the latest available timestamp to ensure the marker dot
+      // matches the real-time status seen in the hover panel.
+      const latestTs = realtimeStatuses[d.id] || d.last_telemetry?.timestamp || d.last_seen || d.status;
+      const s = computeDeviceStatus(latestTs);
+      
       const key = `${t}_${s}`;
       if (!m.has(key)) m.set(key, getDeviceIcon(t, s));
     }
@@ -582,7 +575,7 @@ const SharedMap = ({
     const points = filteredDevices
       .filter((d) => d.latitude && d.longitude)
       .map((d) => [d.latitude!, d.longitude!] as L.LatLngExpression);
-    if (points.length > 0) setMapBounds(L.latLngBounds(points).pad(0.1));
+    if (points.length > 0) setMapBounds(L.latLngBounds(points).pad(0.05));
   }, [devices.length, filteredDevices]);
 
   const cancelClose = useCallback(() => {
@@ -610,7 +603,7 @@ const SharedMap = ({
               [17.45, 78.35],
             ]
           }
-          zoom={13}
+          zoom={15}
           style={{ height: "100%", width: "100%" }}
           zoomControl={showZoom}
           scrollWheelZoom={true}
@@ -624,7 +617,11 @@ const SharedMap = ({
             if (!device.latitude || !device.longitude) return null;
             const t =
               (device as any).analytics_template || device.asset_type || "";
-            const s = realtimeStatuses[device.id] || device.status || "Offline";
+            
+            // FIX: Ensure marker status is computed correctly here too
+            const latestTs = realtimeStatuses[device.id] || device.last_telemetry?.timestamp || device.last_seen || device.status;
+            const s = computeDeviceStatus(latestTs);
+
             const key = `${t}_${s}`;
             const icon =
               iconMap.get(key) ??
@@ -650,7 +647,7 @@ const SharedMap = ({
                     });
                     closeTimer.current = setTimeout(
                       () => setHoverPanel(null),
-                      5000,
+                      3000,
                     );
                   },
                   mouseout: () => {

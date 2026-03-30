@@ -17,7 +17,7 @@ import { AddCustomerForm } from "../../../components/admin/forms/AddCustomerForm
 import { useToast } from "../../../components/ToastProvider";
 import type {
   Zone as RegionRow,
-  Community as CommunityRow,
+
   Customer as UserProfileRow,
   Device as DeviceRow,
 } from "../../../types/entities";
@@ -34,7 +34,6 @@ const RegionCustomers = () => {
   const { regionId } = useParams(); // regionId is the zone name
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [communities, setCommunities] = useState<CommunityRow[]>([]);
   const [customers, setCustomers] = useState<CustomerWithDevices[]>([]);
   const [regionData, setRegionData] = useState<RegionRow | null>(null);
   const [_loading, setLoading] = useState(true);
@@ -45,12 +44,10 @@ const RegionCustomers = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [commData, custData, regData] = await Promise.all([
-          adminService.getCommunities(),
+        const [custData, regData] = await Promise.all([
           adminService.getCustomers(),
           adminService.getRegions(),
         ]);
-        setCommunities(commData as CommunityRow[]);
         setCustomers(custData as CustomerWithDevices[]);
         setRegionData(
           (regData as RegionRow[]).find((r) => r.id === regionId) || null,
@@ -67,12 +64,10 @@ const RegionCustomers = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [commData, custData, regData] = await Promise.all([
-        adminService.getCommunities(),
+      const [custData, regData] = await Promise.all([
         adminService.getCustomers(),
         adminService.getRegions(),
       ]);
-      setCommunities(commData as CommunityRow[]);
       setCustomers(custData as CustomerWithDevices[]);
       const foundRegion = (regData as RegionRow[]).find(
         (r) => r.id === regionId,
@@ -107,10 +102,9 @@ const RegionCustomers = () => {
   };
 
   // Filter Logic: Important bugfix -> use zone_id
-  const regionComms = communities.filter((c) => c.zone_id === regionId);
-  const regionCommIds = regionComms.map((c) => c.id);
+  // Filter Logic: Show customers assigned to this zone (checking new zone_id and legacy regionFilter)
   const regionCustomers = customers.filter(
-    (cust) => cust.community_id && regionCommIds.includes(cust.community_id),
+    (cust) => cust.zone_id === regionId || cust.regionFilter === regionId
   );
 
   return (
@@ -143,7 +137,7 @@ const RegionCustomers = () => {
           {user?.role === "superadmin" && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-[8px] px-5 py-[12px] bg-[#1F2937] text-white text-[13px] font-[600] rounded-[12px] hover:bg-[#111827] shadow-md transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-[12px] bg-[#3A7AFE] text-white font-[700] text-[13px] shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
             >
               <Plus size={16} />
               Add Customer
@@ -164,7 +158,7 @@ const RegionCustomers = () => {
             <thead>
               <tr className="border-b border-[rgba(255,255,255,0.1)] text-[11px] font-[600] text-[#1F2937] opacity-70 uppercase tracking-wider">
                 <th className="px-6 py-5">Customer Profile</th>
-                <th className="px-6 py-5">Geographic Assignment</th>
+                <th className="px-6 py-5">Zone Alignment</th>
                 <th className="px-6 py-5">Platform Status</th>
                 <th className="px-6 py-5">Provisioned Devices</th>
                 <th className="px-6 py-5 text-right">Action</th>
@@ -172,11 +166,8 @@ const RegionCustomers = () => {
             </thead>
             <tbody className="divide-y divide-[rgba(255,255,255,0.1)]">
               {regionCustomers.map((customer) => {
-                const community = regionComms.find(
-                  (c) => c.id === customer.community_id,
-                );
                 const hasAlert = customer.devices?.some(
-                  (d) => d.status !== "Online",
+                  (d) => d.status !== "Online"
                 );
 
                 return (
@@ -211,11 +202,10 @@ const RegionCustomers = () => {
                         </div>
                         <div>
                           <p className="text-[13px] font-[500] text-[#1F2937] opacity-90">
-                            {community?.name || "Unassigned"}
+                            {regionData?.zoneName || "Assigned Zone"}
                           </p>
                           <p className="text-[10px] text-[#1F2937] opacity-50 font-mono uppercase tracking-widest">
-                            {community?.address?.substring(0, 15) ||
-                              "Zone Context"}
+                            {regionData?.state || "Geographic Context"}
                           </p>
                         </div>
                       </div>
@@ -300,8 +290,7 @@ const RegionCustomers = () => {
                 No Customers Found
               </h4>
               <p className="glass-secondary max-w-xs mx-auto mt-1">
-                There are no customers registered in this zone's communities
-                yet.
+                There are no customers registered in this zone yet.
               </p>
             </div>
           )}

@@ -29,6 +29,7 @@ const CustomerDetails = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState<any | null>(null);
   const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null); // Task 3: Deletion State
+  const [deviceToggles, setDeviceToggles] = useState<Record<string, boolean>>({});
   const { user } = useAuth();
   const { showToast } = useToast();
 
@@ -37,8 +38,8 @@ const CustomerDetails = () => {
     if (!customerId) return;
     setLoading(true);
     try {
-        const expandedData = await adminService.getCustomer(customerId);
-        setClient(expandedData);
+      const expandedData = await adminService.getCustomer(customerId);
+      setClient(expandedData);
     } catch (error) {
       console.error("Failed to fetch client details:", error);
       showToast("Error loading customer profile", "error");
@@ -54,17 +55,23 @@ const CustomerDetails = () => {
   // Task 7: Real-Time Sync for Nodes via API polling
   useEffect(() => {
     if (!customerId) return;
-    
+
     // Abstracted away into deviceService which natively polls via Axios
     const unsub = deviceService.subscribeToNodeUpdates(
-         (nodesData) => setNodes([nodesData]), // Re-structured locally inside deviceService caching mechanics
-         { community_id: "ignore_we_are_fetching_all" }
+      (nodesData) => setNodes([nodesData]), // Re-structured locally inside deviceService caching mechanics
+      { community_id: "ignore_we_are_fetching_all" }
     );
-    
+
     // To correctly capture all nodes locally:
     const fetchNodes = async () => {
-         const allNodes = await deviceService.getMapNodes(undefined, customerId);
-         setNodes(allNodes);
+      const allNodes = await deviceService.getMapNodes(undefined, customerId);
+      setNodes(allNodes);
+      // Initialise toggle state from device status
+      const toggleMap: Record<string, boolean> = {};
+      allNodes.forEach((n: any) => {
+        toggleMap[n.id] = n.status === 'active' || n.status === 'Online';
+      });
+      setDeviceToggles(toggleMap);
     };
     fetchNodes();
 
@@ -110,7 +117,7 @@ const CustomerDetails = () => {
         </p>
         <button
           onClick={() => navigate("/superadmin/customers")}
-          className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-slate-200"
+          className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-blue-200"
         >
           Return to Directory
         </button>
@@ -133,19 +140,10 @@ const CustomerDetails = () => {
         </span>
         <ChevronRight size={14} className="shrink-0" />
         <span
-          onClick={() => navigate(`/superadmin/zones/${zone?.id}`)}
-          className="hover:text-blue-600 cursor-pointer truncate max-w-[100px]"
+          onClick={() => navigate(`/superadmin/zones/${zone?.id}/customers`)}
+          className="hover:text-blue-600 cursor-pointer truncate max-w-[150px]"
         >
           {zone?.name || zone?.zoneName || "Zone"}
-        </span>
-        <ChevronRight size={14} className="shrink-0" />
-        <span
-          onClick={() =>
-            navigate(`/superadmin/communities/${shadowCommunity?.id}`)
-          }
-          className="hover:text-blue-600 cursor-pointer truncate max-w-[100px]"
-        >
-          {shadowCommunity?.name || "Community"}
         </span>
         <ChevronRight size={14} className="shrink-0" />
         <span className="font-bold text-slate-800 truncate">
@@ -161,9 +159,7 @@ const CustomerDetails = () => {
           <p className="text-slate-500">Customer Profile & Device Management</p>
         </div>
         <button
-          onClick={() =>
-            navigate(`/superadmin/communities/${shadowCommunity?.id}`)
-          }
+          onClick={() => navigate(`/superadmin/zones/${zone?.id}/customers`)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-white/30 text-sm font-medium"
         >
           <ArrowLeft size={16} /> Back
@@ -213,12 +209,12 @@ const CustomerDetails = () => {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-bold uppercase">
-                    Community
+                    Assigned Zone
                   </p>
                   <p className="text-slate-800 font-medium">
-                    {shadowCommunity?.name || "N/A"}
+                    {zone?.name || zone?.zoneName || "N/A"}
                   </p>
-                  <p className="text-xs text-slate-400">{zone?.name || ""}</p>
+                  <p className="text-xs text-slate-400">{zone?.state || ""}</p>
                 </div>
               </div>
 
@@ -268,13 +264,12 @@ const CustomerDetails = () => {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`p-2 rounded-lg ${
-                          device.analytics_template === "EvaraTank"
+                        className={`p-2 rounded-lg ${device.analytics_template === "EvaraTank"
                             ? "bg-indigo-100 text-indigo-600"
                             : device.analytics_template === "EvaraFlow"
                               ? "bg-cyan-100 text-cyan-600"
                               : "bg-sky-100 text-sky-600"
-                        }`}
+                          }`}
                       >
                         <Box size={20} />
                       </div>
@@ -292,12 +287,11 @@ const CustomerDetails = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <div
-                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-                          device.status === "active" ||
-                          device.status === "Online"
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${device.status === "active" ||
+                            device.status === "Online"
                             ? "bg-green-100 text-green-700 border-green-200"
                             : "bg-slate-200 text-slate-600 border-slate-300"
-                        }`}
+                          }`}
                       >
                         {device.status || "Offline"}
                       </div>
@@ -311,21 +305,53 @@ const CustomerDetails = () => {
                     <span className="font-medium text-slate-700">Recently</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    {/* Task 1: Configure Button */}
+                  <div className="flex items-center justify-between mt-3 w-full">
+                    {/* Configure Button */}
                     <button
-                      onClick={() => setEditingDevice(device)}
-                      className="py-2.5 rounded-xl apple-glass-card border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const isFlow =
+                          (device.analytics_template || '').toLowerCase().includes('flow') ||
+                          (device.device_type || '').toLowerCase().includes('flow') ||
+                          (device.assetType || '').toLowerCase().includes('flow');
+                        navigate(isFlow ? `/configure-flow/${device.id}` : `/configure/${device.id}`);
+                      }}
+                      className="px-4 py-2.5 rounded-xl apple-glass-card border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
                     >
                       <Settings size={14} /> Configure
                     </button>
 
-                    {/* Task 1 & 2: Delete Button */}
+                    {/* Toggle Switch (standalone) */}
                     <button
-                      onClick={() => setDeletingDeviceId(device.id)}
-                      className="py-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 text-[11px] font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                      type="button"
+                      role="switch"
+                      aria-checked={!!deviceToggles[device.id]}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeviceToggles(prev => ({ ...prev, [device.id]: !prev[device.id] }));
+                      }}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${deviceToggles[device.id]
+                          ? 'bg-[#0077ff]'
+                          : 'bg-[#e2e8f0]'
+                        }`}
                     >
-                      <Trash2 size={14} /> Delete
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${deviceToggles[device.id]
+                            ? 'translate-x-5'
+                            : 'translate-x-0'
+                          }`}
+                      />
+                    </button>
+
+                    {/* Delete Icon (standalone) */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingDeviceId(device.id);
+                      }}
+                      className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors border border-red-100"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -404,21 +430,20 @@ const CustomerDetails = () => {
           initialData={
             editingDevice
               ? {
-                  ...editingDevice,
-                  name: editingDevice.label || editingDevice.displayName,
-                  customer_id: client?.id,
-                  community_id: shadowCommunity?.id,
-                  regionFilter: zone?.id,
-                  ...(editingDevice.metadata?.thingspeak || {}),
-                  ...(editingDevice.metadata?.config_tank || {}),
-                  ...(editingDevice.metadata?.config_deep || {}),
-                  ...(editingDevice.metadata?.config_flow || {}),
-                }
+                ...editingDevice,
+                name: editingDevice.label || editingDevice.displayName,
+                customer_id: client?.id,
+                regionFilter: zone?.id,
+                ...(editingDevice.metadata?.thingspeak || {}),
+                ...(editingDevice.metadata?.config_tank || {}),
+                ...(editingDevice.metadata?.config_deep || {}),
+                ...(editingDevice.metadata?.config_flow || {}),
+              }
               : {
-                  customer_id: client?.id,
-                  community_id: shadowCommunity?.id,
-                  regionFilter: zone?.id,
-                }
+                customer_id: client?.id,
+                community_id: shadowCommunity?.id,
+                regionFilter: zone?.id,
+              }
           }
         />
       </Modal>

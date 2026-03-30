@@ -79,7 +79,7 @@ export function useTelemetryHistory(
         enabled: isEnabled,
         staleTime: 5 * 60_000,
         gcTime: 15 * 60_000,
-        refetchInterval: 120_000,
+        refetchInterval: 300000, // Reduced from 5s to 5m
         refetchOnWindowFocus: false,
         retry: 2,
         retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 30_000),

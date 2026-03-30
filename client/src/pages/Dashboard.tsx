@@ -1,10 +1,9 @@
-import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getAllNodes, subscribeToNodes } from "../services/nodeService";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNodes } from "../hooks/useNodes";
 import { adminService } from "../services/admin";
 import { socket } from "../services/api";
-import { computeOnlineStatus } from "../utils/telemetryPipeline";
-import { useState } from "react";
+import { computeDeviceStatus } from "../services/DeviceService";
 import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
@@ -14,73 +13,37 @@ import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import KPIAuthoritativeCard from "../components/dashboard/KPIAuthoritativeCard";
 import ProductPieChart from "../components/dashboard/ProductPieChart";
 import AlertsActivityPanel from "../components/dashboard/AlertsActivityPanel";
-import NodeDataExplorer from "../components/dashboard/NodeDataExplorer";
 import SharedMap from "../components/map/SharedMap";
 import ErrorBoundary from "../components/ErrorBoundary";
 
 // ─── System Health Card ───────────────────────────────────────────────────────
 const SystemHealthCard = ({ systemStatus, healthPct }: { systemStatus: string; healthPct: number }) => (
-  <div className="apple-glass-card p-[20px] rounded-[20px] h-full flex flex-col justify-between">
-    <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em]">System Health</span>
-    <div className="flex-1 flex items-center gap-3 my-2">
-      <h2 className="text-[52px] font-[800] leading-none tracking-tight text-[#1F2937]">{healthPct}</h2>
-      <span className="text-[28px] font-[700] text-gray-400 leading-none mt-2">%</span>
+  <div className="apple-glass-card px-[20px] py-[16px] rounded-[20px] h-full flex flex-col justify-between">
+    <div className="flex justify-between items-start">
+      <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em]">System Health</span>
+      <div className="w-6 h-6 rounded-full bg-blue-50/50 flex items-center justify-center border border-blue-100/20">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3A7AFE" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+      </div>
     </div>
-    <div className={clsx(
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-[800] uppercase tracking-widest w-fit",
-      systemStatus === "Optimal"
-        ? "bg-green-100/60 text-green-600 border border-green-200/50"
-        : "bg-amber-100/60 text-amber-600 border border-amber-200/50"
-    )}>
+    <div className="flex items-baseline gap-2">
+      <h2 className="text-[36px] font-[800] text-[#1F2937] leading-none tracking-tight">{healthPct}</h2>
+      <span className="text-[20px] font-[800] text-gray-400 leading-none">%</span>
+    </div>
+    <div className="flex items-center gap-1.5">
       <span className={clsx(
-        "w-1.5 h-1.5 rounded-full",
-        systemStatus === "Optimal" ? "bg-green-500 animate-pulse" : "bg-amber-500"
+        "w-2 h-2 rounded-full",
+        systemStatus === "Optimal" ? "bg-[#16A34A] shadow-[0_0_8px_rgba(22,163,74,0.4)]" : "bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.4)]"
       )} />
-      {systemStatus === "Optimal" ? "Active" : "Attention"}
+      <span className="text-[10px] font-[800] text-gray-500 uppercase tracking-tight">
+        {systemStatus === "Optimal" ? "Active" : "Attention Required"}
+      </span>
     </div>
   </div>
 );
 
-// ─── Recent Activity Card (from audit logs) ───────────────────────────────────
-const RecentActivityCard = ({ logs }: { logs: any[] }) => {
-  const iconColors: Record<string, string> = {
-    critical: "bg-red-100 text-red-500",
-    warning: "bg-amber-100 text-amber-500",
-    info: "bg-green-100 text-green-600",
-  };
 
-  return (
-    <div className="apple-glass-card p-[20px] rounded-[20px] h-full flex flex-col">
-      <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-4 shrink-0">Recent Activity</span>
-      <div className="flex-1 flex flex-col gap-3 overflow-hidden min-h-0">
-        {logs.length > 0 ? logs.slice(0, 4).map((log) => (
-          <div key={log.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white/30 border border-white/20 backdrop-blur-sm">
-            <div className={clsx("w-9 h-9 rounded-xl flex items-center justify-center text-[16px] shrink-0", iconColors[log.severity] || "bg-gray-100 text-gray-500")}>
-              {log.severity === "critical" ? "⚠" : log.severity === "warning" ? "⚡" : "✓"}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[12px] font-[800] text-gray-800 uppercase tracking-wider truncate">{log.event_type.replace(/_/g, " ")}</span>
-              <span className="text-[10px] text-gray-400">{log.timestamp} • {log.device_id}</span>
-            </div>
-          </div>
-        )) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-10 h-10 rounded-2xl bg-green-100/50 flex items-center justify-center text-green-500 text-xl mx-auto mb-2">✓</div>
-              <span className="text-[11px] text-gray-400 font-medium">No recent activity</span>
-            </div>
-          </div>
-        )}
-      </div>
-      <Link
-        to="/admin/audit-logs"
-        className="mt-3 w-full text-center text-[11px] font-[800] text-blue-500 uppercase tracking-widest py-2 rounded-2xl border border-blue-100/50 hover:bg-blue-50/50 transition-all shrink-0"
-      >
-        View Full Log
-      </Link>
-    </div>
-  );
-};
 
 // ─── Level Trend 24H Chart ────────────────────────────────────────────────────
 const LevelTrendChart = ({ nodes }: { nodes: any[] }) => {
@@ -100,20 +63,21 @@ const LevelTrendChart = ({ nodes }: { nodes: any[] }) => {
       <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-4 shrink-0">Level Trend (24H)</span>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barSize={14}>
+          <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="10%">
             <XAxis
               dataKey="time"
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 9, fontWeight: 700, fill: "#9ca3af", textTransform: "uppercase" }}
-              interval={0}
+              tick={{ fontSize: 9, fontWeight: 700, fill: "#9ca3af" }}
+              interval="preserveStartEnd"
             />
             <Tooltip
               contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", fontSize: 11 }}
               formatter={(v: any) => [`${Math.round(v)}%`, "Level"]}
             />
-            <Bar dataKey="level" radius={[6, 6, 0, 0]}
+            <Bar dataKey="level" radius={[8, 8, 0, 0]}
               fill="rgba(10,132,255,0.7)"
+              maxBarSize={48}
             />
           </BarChart>
         </ResponsiveContainer>
@@ -139,19 +103,21 @@ const UsagePeakChart = ({ nodes }: { nodes: any[] }) => {
       <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-4 shrink-0">Usage Peak (Weekly)</span>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 4, right: 8, left: -24, bottom: 0 }} barSize={18}>
+          <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="10%">
             <XAxis
               dataKey="day"
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 9, fontWeight: 700, fill: "#9ca3af" }}
+              interval="preserveStartEnd"
             />
             <Tooltip
               contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", fontSize: 11 }}
               formatter={(v: any) => [`${Math.round(v)}%`, "Usage"]}
             />
-            <Bar dataKey="usage" radius={[6, 6, 0, 0]}
+            <Bar dataKey="usage" radius={[8, 8, 0, 0]}
               fill="#22d3ee"
+              maxBarSize={48}
             />
           </BarChart>
         </ResponsiveContainer>
@@ -162,13 +128,7 @@ const UsagePeakChart = ({ nodes }: { nodes: any[] }) => {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 function Dashboard() {
-  const queryClient = useQueryClient();
-
-  const { data: nodes = [] } = useQuery<any[]>({
-    queryKey: ["real_nodes"],
-    queryFn: getAllNodes,
-    staleTime: 1000 * 60 * 5,
-  });
+  const { nodes } = useNodes() as { nodes: any[] };
 
   const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
 
@@ -176,19 +136,14 @@ function Dashboard() {
     const handleUpdate = (data: any) => {
       const id = data.device_id || data.node_id;
       if (!id) return;
-      const status = computeOnlineStatus(data.timestamp || data.created_at || data.last_seen, id);
+      const status = computeDeviceStatus(data.timestamp || data.created_at || data.last_seen);
       setRealtimeStatuses(prev => ({ ...prev, [id]: status }));
     };
     socket.on("telemetry_update", handleUpdate);
     return () => { socket.off("telemetry_update", handleUpdate); };
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToNodes((updatedNodes) => {
-      queryClient.setQueryData(["real_nodes"], updatedNodes);
-    });
-    return () => unsubscribe();
-  }, [queryClient]);
+  // Removed legacy polling as useNodes handles it
 
   const { totalDevices, onlineDevices, offlineDevices, tankNodes, flowNodes, deepNodes } = useMemo(() => {
     const total = nodes.length;
@@ -197,9 +152,7 @@ function Dashboard() {
     const flow = nodes.filter(n => ["evaraflow", "EvaraFlow", "flow", "flow_meter"].includes(n.asset_type)).length;
     const deep = nodes.filter(n => ["evaradeep", "EvaraDeep", "bore", "govt"].includes(n.asset_type)).length;
     return { totalDevices: total, onlineDevices: online, offlineDevices: total - online, tankNodes: tank, flowNodes: flow, deepNodes: deep };
-  }, [nodes, realtimeStatuses]);
-
-  const { data: auditLogs = [] } = useQuery({
+  }, [nodes, realtimeStatuses]); const { data: auditLogs = [] } = useQuery({
     queryKey: ["dashboard_audit_logs"],
     queryFn: async () => {
       const logs = await adminService.getAuditLogs();
@@ -217,7 +170,6 @@ function Dashboard() {
     },
     staleTime: 1000 * 60 * 5,
   });
-
   const explorerNodes = useMemo(() => nodes.map((n) => {
     const isOnline = n.status === "Online";
     const nodeHardwareId = n.hardwareId || n.id;
@@ -259,7 +211,7 @@ function Dashboard() {
   const healthPct = systemStatus === "Optimal" ? 92 : 78;
 
   return (
-    <div className="w-full h-screen overflow-hidden bg-transparent relative flex flex-col">
+    <div className="w-full min-h-screen flex flex-col bg-transparent relative pt-[85px] lg:pt-[95px] pb-6">
       {/* Subtle noise texture */}
       <div
         className="absolute inset-0 opacity-[0.015] pointer-events-none z-0"
@@ -268,34 +220,64 @@ function Dashboard() {
         }}
       />
 
-      <div className="flex-1 w-full px-8 pt-[100px] pb-[20px] overflow-hidden flex flex-col relative z-10 gap-4">
-
-        {/* ── HEADER ── */}
-        <header className="shrink-0">
-          <h1 className="text-[36px] font-[800] tracking-tight text-[#004ba0] leading-none mb-1">
-            System Dashboard
-          </h1>
-          <p className="text-[11px] text-blue-500 font-black uppercase tracking-[0.25em] leading-none">
-            Real-Time Network Intelligence
-          </p>
+      {/* ── Top Header Bar ── */}
+      <div className="px-4 lg:px-6 pt-3 pb-2 relative z-10">
+        <header className="max-w-screen-2xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[28px] font-[800] tracking-tight text-[#004ba0] leading-none mb-1.5">
+              System Dashboard
+            </h1>
+            <p className="text-[11px] text-blue-500 font-bold uppercase tracking-[0.15em] opacity-80 mb-0">
+              Real-Time Network Intelligence
+            </p>
+          </div>
         </header>
+      </div>
 
-        {/* ── ROW 1: 4 KPI Cards ── */}
-        <div className="grid grid-cols-4 gap-4 shrink-0" style={{ height: "140px" }}>
-          <KPIAuthoritativeCard
-            total={totalDevices}
-            online={onlineDevices}
-            offline={offlineDevices}
+      {/* ── Top Row: 4-col grid (3 KPI cards + Map) ── */}
+      <div className="grid grid-cols-4 gap-4 px-4 lg:px-6 mb-4 relative z-10">
+        <KPIAuthoritativeCard
+          total={totalDevices}
+          online={onlineDevices}
+          offline={offlineDevices}
+          className="min-h-[140px]"
+        />
+        <AlertsActivityPanel
+          total={auditLogs.length}
+          critical={auditLogs.filter((l: any) => l.severity === "critical").length}
+          warning={auditLogs.filter((l: any) => l.severity === "warning").length}
+          className="min-h-[140px]"
+        />
+        <SystemHealthCard systemStatus={systemStatus} healthPct={healthPct} />
+        {/* Map */}
+        <div className="min-h-[140px] relative group rounded-[20px] overflow-hidden border border-white/40 shadow-sm">
+          <SharedMap
+            devices={mapDevices as any}
+            pipelines={[]}
+            height="100%"
+            showZoom={false}
             className="h-full"
           />
-          <AlertsActivityPanel
-            total={auditLogs.length}
-            critical={auditLogs.filter((l) => l.severity === "critical").length}
-            warning={auditLogs.filter((l) => l.severity === "warning").length}
-            recentAlerts={auditLogs.slice(0, 3)}
-            className="h-full"
-          />
-          <SystemHealthCard systemStatus={systemStatus} healthPct={healthPct} />
+          <div className="absolute top-3 right-3 z-[500]">
+            <Link
+              to="/map"
+              className="px-4 py-1.5 rounded-[16px] bg-white text-[10px] font-[800] text-blue-600 shadow-xl border border-white flex items-center gap-1.5 transition-all opacity-0 group-hover:opacity-100 uppercase tracking-widest"
+            >
+              Expand <ArrowUpRight size={12} />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bottom Row: 3 chart cards that scale with the screen ── */}
+      <div className="grid grid-cols-3 gap-4 px-4 lg:px-6 flex-1 relative z-10">
+        <div className="h-full min-h-[280px] max-h-[45vh]">
+          <LevelTrendChart nodes={nodes} />
+        </div>
+        <div className="h-full min-h-[280px] max-h-[45vh]">
+          <UsagePeakChart nodes={nodes} />
+        </div>
+        <div className="h-full min-h-[280px] max-h-[45vh]">
           <ProductPieChart
             tank={tankNodes}
             flow={flowNodes}
@@ -303,46 +285,15 @@ function Dashboard() {
             className="h-full"
           />
         </div>
-
-        {/* ── ROW 2: Node Explorer + Map ── */}
-        <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
-          <div className="col-span-7 h-full min-h-0">
-            <NodeDataExplorer nodes={explorerNodes} className="h-full" />
-          </div>
-          <div className="col-span-5 h-full relative group rounded-[20px] overflow-hidden border border-white/40 shadow-sm">
-            <SharedMap
-              devices={mapDevices as any}
-              pipelines={[]}
-              height="100%"
-              showZoom={false}
-              className="h-full"
-            />
-            <div className="absolute top-3 right-3 z-[500]">
-              <Link
-                to="/map"
-                className="px-4 py-1.5 rounded-[16px] bg-white text-[10px] font-[800] text-blue-600 shadow-xl border border-white flex items-center gap-1.5 transition-all opacity-0 group-hover:opacity-100 uppercase tracking-widest"
-              >
-                Expand <ArrowUpRight size={12} />
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* ── ROW 3: Charts ── */}
-        <div className="grid grid-cols-3 gap-4 shrink-0" style={{ height: "200px" }}>
-          <RecentActivityCard logs={auditLogs} />
-          <LevelTrendChart nodes={nodes} />
-          <UsagePeakChart nodes={nodes} />
-        </div>
-
-        {/* ── FOOTER ── */}
-        <footer className="shrink-0 text-center">
-          <p className="text-[9px] font-[700] text-gray-400/60 uppercase tracking-[0.2em]">
-            © 2025 System Intelligence. All Rights Reserved.
-          </p>
-        </footer>
-
       </div>
+
+      {/* ── FOOTER ── */}
+      <div className="text-center py-3 mt-auto relative z-10">
+        <p className="text-[9px] font-[700] text-gray-400/60 uppercase tracking-[0.2em]">
+          © 2025 System Intelligence. All Rights Reserved.
+        </p>
+      </div>
+
     </div>
   );
 }

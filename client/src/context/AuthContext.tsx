@@ -32,6 +32,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   login: (
     email: string,
     password: string,
@@ -233,6 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         user,
         isAuthenticated: !!user,
         loading,
+        setUser,
         login,
         signup,
         logout,

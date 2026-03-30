@@ -3,7 +3,6 @@ import { useState } from "react";
 import { ArrowLeft, MapPin, Cpu } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import api from "../services/api";
-import UnifiedNodeAnalytics from "./UnifiedNodeAnalytics";
 import type { NodeRow } from "../types/database";
 
 import clsx from "clsx";
@@ -168,10 +167,7 @@ const NodeDetails = () => {
             </div>
           </div>
         </div>
-        {/* Specific Analytics based on some logic or metadata */}
-        <div className="p-6">
-          <UnifiedNodeAnalytics />
-        </div>
+
       </div>
     );
   }
@@ -186,7 +182,7 @@ const NodeDetails = () => {
         <p className="text-sm text-slate-400 mb-6">Blueprint ID: {id}</p>
         <button
           onClick={() => navigate(-1)}
-          className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+          className="px-5 py-2.5 bg-[#3A7AFE] text-white rounded-xl text-sm font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all"
         >
           Go Back
         </button>

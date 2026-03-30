@@ -7,7 +7,7 @@ import { AddZoneForm } from "../../../components/admin/forms/AddZoneForm";
 import {
   MapPin,
   Users,
-  Building,
+
   AlertTriangle,
   ArrowRight,
   Plus,
@@ -23,7 +23,7 @@ interface RegionStat {
   zone_id: string;
   region_name: string;
   state?: string;
-  community_count: number;
+
   customer_count: number;
   device_count: number;
   online_devices: number;
@@ -44,8 +44,8 @@ const RegionsOverview = () => {
     try {
       const [regionsData, statsData] = await Promise.all([
         adminService.getRegions(),
-        adminService.getRegionStats().catch((err) => {
-          console.error("[DEBUG] getRegionStats failed:", err);
+        adminService.getRegionStats().catch(() => {
+          // Silently handle stats failure - regions can still be displayed
           return [];
         }),
       ]);
@@ -53,7 +53,8 @@ const RegionsOverview = () => {
       setRegions(regionsData as RegionRow[]);
       setStats(statsData as RegionStat[]);
     } catch (error) {
-      console.error("[DEBUG] Global Fetch Error:", error);
+      // Use toast for user-facing error notification
+      showToast("Failed to load regions data", "error");
     } finally {
       setLoading(false);
     }
@@ -70,7 +71,7 @@ const RegionsOverview = () => {
   const getStatsForRegion = (regionId: string) => {
     const s = stats.find((st) => st.zone_id === regionId);
     return {
-      communities: s?.community_count || 0,
+
       customers: s?.customer_count || 0,
       devices: s?.device_count || 0,
       online: s?.online_devices || 0,
@@ -119,7 +120,7 @@ const RegionsOverview = () => {
         {user?.role === "superadmin" && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-[8px] px-5 py-[12px] bg-[#1F2937] text-white text-[13px] font-[600] rounded-[12px] hover:bg-[#111827] shadow-[0_8px_16px_rgba(31,41,55,0.2)] transition-all transform hover:-translate-y-[1px]"
+            className="flex items-center gap-2 px-4 py-2 rounded-[12px] bg-[#3A7AFE] text-white font-[700] text-[13px] shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus size={16} />
             Create New Zone
@@ -137,10 +138,10 @@ const RegionsOverview = () => {
           return (
             <div
               key={zone.id}
-              onClick={() => navigate(`/superadmin/zones/${zone.id}`)}
+              onClick={() => navigate(`/superadmin/zones/${zone.id}/customers`)}
               className="apple-glass-card group cursor-pointer"
             >
-              <div className="apple-glass-content relative flex flex-col h-full">
+              <div className="apple-glass-content relative flex flex-col h-full p-[24px]">
                 {/* Background Icon */}
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
                   <MapPin size={80} className="text-[#3A7AFE]" />
@@ -185,14 +186,7 @@ const RegionsOverview = () => {
 
                 {/* Stats */}
                 <div className="apple-glass-inner p-[16px] space-y-[12px] relative z-10 mb-[20px] flex-1">
-                  <div className="flex items-center justify-between text-[13px]">
-                    <span className="flex items-center gap-[8px] text-[#1F2937] opacity-70 font-[500]">
-                      <Building size={14} className="opacity-50" /> Communities
-                    </span>
-                    <span className="font-[600] text-[#1F2937]">
-                      {rs.communities}
-                    </span>
-                  </div>
+
                   <div className="flex items-center justify-between text-[13px]">
                     <span className="flex items-center gap-[8px] text-[#1F2937] opacity-70 font-[500]">
                       <Users size={14} className="opacity-50" /> Customers
@@ -298,7 +292,7 @@ const RegionsOverview = () => {
               {user?.role === "superadmin" && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="px-8 py-[14px] bg-[#1F2937] text-white text-[14px] font-[600] rounded-[16px] hover:bg-[#111827] shadow-[0_8px_16px_rgba(31,41,55,0.15)] transition-all transform hover:-translate-y-[1px]"
+                  className="px-8 py-[14px] bg-[#3A7AFE] text-white text-[14px] font-[600] rounded-[16px] hover:bg-[#2563EB] shadow-[0_8px_16px_rgba(58,122,254,0.15)] transition-all transform hover:-translate-y-[1px]"
                 >
                   Create First Zone
                 </button>

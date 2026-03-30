@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, ArrowRight } from 'lucide-react';
 import clsx from 'clsx';
 import { getDeviceAnalyticsRoute } from '../../utils/deviceRouting';
 import { useRealtimeTelemetry } from '../../hooks/useRealtimeTelemetry';
@@ -23,7 +23,7 @@ interface NodeData {
 // ─── Sub-component for individual Node Cards ──────────────────────────────
 const NodeExplorerItem = ({ node }: { node: NodeData }) => {
     const navigate = useNavigate();
-    const { telemetry: snap } = useRealtimeTelemetry(node.id);
+    const { telemetry: snap } = useRealtimeTelemetry(node.firestore_id);
     const isTank = node.type === 'tank';
     
     // Percentage calculation for tanks
@@ -57,14 +57,16 @@ const NodeExplorerItem = ({ node }: { node: NodeData }) => {
                 <span className="text-[10px] font-black text-blue-500/60 uppercase tracking-widest">
                     {node.type === 'tank' ? 'EvaraTank' : node.type === 'flow' ? 'EvaraFlow' : 'EvaraDeep'}
                 </span>
-                <div className={clsx(
-                    "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter flex items-center gap-1.5",
-                    node.status === "Online" 
-                        ? "bg-green-100/50 text-green-600 border border-green-200/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]" 
-                        : "bg-red-100/50 text-red-500 border border-red-200/50"
-                )}>
-                    <span className={clsx("w-1.5 h-1.5 rounded-full", node.status === "Online" ? "bg-green-500 animate-pulse" : "bg-red-400")} />
-                    {node.status === "Online" ? "LIVE" : "OFFLINE"}
+                <div className="flex items-center gap-1.5">
+                    <span className={clsx(
+                        "w-2 h-2 rounded-full",
+                        node.status === "Online" 
+                            ? "bg-[#16A34A] shadow-[0_0_8px_rgba(22,163,74,0.4)]" 
+                            : "bg-[#DC2626] shadow-[0_0_8px_rgba(220,38,38,0.4)]"
+                    )} />
+                    <span className="text-[10px] font-[800] text-gray-500 uppercase tracking-tight">
+                        {node.status === "Online" ? "Live" : "Offline"}
+                    </span>
                 </div>
             </div>
             
@@ -101,6 +103,11 @@ const NodeExplorerItem = ({ node }: { node: NodeData }) => {
                     ))}
                 </div>
             )}
+
+            <div className="mt-3 flex items-center gap-1 text-[9px] font-[800] text-blue-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <span>Explore Intelligence</span>
+                <ArrowRight size={10} className="group-hover:translate-x-1 transition-transform" />
+            </div>
         </div>
     );
 };
@@ -119,38 +126,11 @@ export const NodeDataExplorer = ({ nodes, className }: { nodes: NodeData[], clas
     });
 
     return (
-        <div className={clsx("apple-glass-card p-[24px] rounded-[50px] flex flex-col", className)}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 shrink-0">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-[16px] font-black text-[#1f2937] uppercase tracking-widest leading-none">Node Explorer</h3>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <select
-                        value={activeType}
-                        onChange={(e) => setActiveType(e.target.value as NodeType)}
-                        className="bg-gray-100/50 border border-gray-200/30 text-[12px] font-black text-gray-600 rounded-[20px] px-5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none shadow-sm cursor-pointer hover:bg-white transition-all w-full sm:w-40"
-                        style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'m6 9 6 6 6-6\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 15px center', paddingRight: '40px' }}
-                    >
-                        <option value="tank">EvaraTank</option>
-                        <option value="deep">EvaraDeep</option>
-                        <option value="flow">EvaraFlow</option>
-                    </select>
-
-                    <select
-                        value={activeLocation}
-                        onChange={(e) => setActiveLocation(e.target.value)}
-                        className="bg-gray-100/50 border border-gray-200/30 text-[12px] font-black text-gray-600 rounded-[20px] px-5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none shadow-sm cursor-pointer hover:bg-white transition-all w-full sm:w-44"
-                        style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' fill=\'none\' stroke=\'%236b7280\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\' viewBox=\'0 0 24 24\'%3E%3Cpath d=\'m6 9 6 6 6-6\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 15px center', paddingRight: '40px' }}
-                    >
-                        <option value="all">All Locations</option>
-                        {uniqueLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                    </select>
-                </div>
-            </div>
+        <div className={clsx("apple-glass-card px-[20px] py-[16px] rounded-[20px] flex flex-col", className)}>
+            {/* Filters removed as per user request */}
 
             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar min-h-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-3 gap-5 pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-5 pb-4">
                     {filteredNodes.length > 0 ? filteredNodes.map((node) => (
                         <NodeExplorerItem key={node.id} node={node} />
                     )) : (

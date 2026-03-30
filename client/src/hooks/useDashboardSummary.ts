@@ -23,9 +23,9 @@ export const useDashboardSummary = () => {
       }
       return await adminService.getDashboardSummary();
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes stale
-    gcTime: 1000 * 60 * 10, // 10 minutes cache
-    refetchInterval: 1000 * 60 * 5, // refresh every 5 minutes (saves ~17K reads/day)
+    staleTime: 2000, 
+    gcTime: 1000 * 60 * 10, 
+    refetchInterval: 300000, // Reduced from 5s to 5m
     retry: 0,
     enabled: isAuthenticated,
     placeholderData: keepPreviousData,

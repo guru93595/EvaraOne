@@ -146,9 +146,9 @@ const Login = () => {
             className="group apple-glass-card p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-blue-300 transition-all text-left relative overflow-hidden min-h-[320px] w-full md:w-[380px] flex flex-col justify-end"
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Shield size={120} className="text-blue-600" />
+              <Shield size={120} className="text-[#3A7AFE]" />
             </div>
-            <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mb-6 text-blue-600 group-hover:scale-110 transition-transform">
+            <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mb-6 text-[#3A7AFE] group-hover:scale-110 transition-transform">
               <Shield size={28} />
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-blue-700">
@@ -228,7 +228,7 @@ const Login = () => {
                 className={clsx(
                   "flex-1 py-4 text-sm font-bold transition-all flex items-center justify-center gap-2",
                   mode === "signin"
-                    ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50/50"
+                    ? "text-[#3A7AFE] border-b-2 border-[#3A7AFE] bg-blue-50/50"
                     : "text-slate-400",
                 )}
               >
@@ -315,8 +315,8 @@ const Login = () => {
               className={clsx(
                 "w-full py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5",
                 isSuperAdmin
-                  ? "bg-slate-900 hover:bg-slate-800"
-                  : "bg-blue-600 hover:bg-blue-700",
+                  ? "bg-[#3A7AFE] hover:opacity-90"
+                  : "bg-[#3A7AFE] hover:opacity-90",
               )}
             >
               {isLoading ? (

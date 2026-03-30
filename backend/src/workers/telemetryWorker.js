@@ -1,7 +1,9 @@
-const axios = require("axios");
-const { db, admin } = require("../config/firebase.js");
-const cacheService = require("../services/cacheService.js"); 
+const { db } = require("../config/firebase.js");
+const cacheService = require("../services/cacheService.js");
 const cache = require("../config/cache.js");
+const { fetchSixHourData } = require("../services/thingspeakService.js");
+const deviceState = require("../services/deviceStateService.js");
+const { startStatusCron } = require("./deviceStatusCron.js");
 
 // SaaS Architecture: Redis Pub/Sub Support
 const pubSub = cache.getPubSub();
@@ -12,8 +14,9 @@ const EventEmitter = require('events');
 const telemetryEvents = new EventEmitter();
 telemetryEvents.setMaxListeners(0);
 
-const POLL_INTERVAL = process.env.TELEMETRY_POLL_INTERVAL || 5000; // Default 5 seconds
+const POLL_INTERVAL = 60 * 1000; // 1 minute
 const BATCH_SIZE = 5; // How many concurrent requests to ThingSpeak to avoid ban
+const STATUS_CHECK_INTERVAL = 60 * 1000; // 1 minute cron job
 
 async function getActiveDevices() {
     try {
@@ -53,6 +56,8 @@ async function getActiveDevices() {
                 const { id, meta } = item;
                 if (meta.thingspeak_channel_id && meta.thingspeak_read_api_key) {
                     devices.push({
+                        ...registryDataMap[id],
+                        ...meta,
                         id: id,
                         type: registryDataMap[id].device_type,
                         channel: meta.thingspeak_channel_id.trim(),
@@ -60,7 +65,8 @@ async function getActiveDevices() {
                         mapping: meta.sensor_field_mapping || {},
                         depth: meta.configuration?.depth || meta.configuration?.total_depth || meta.tank_size || 1.2,
                         capacity: meta.tank_size || 0,
-                        last_seen: meta.last_seen
+                        lastUpdatedAt: meta.lastUpdatedAt || meta.last_updated_at || meta.last_seen || null,
+                        status: meta.status || "OFFLINE"
                     });
                 }
             }
@@ -77,83 +83,37 @@ async function getActiveDevices() {
 
 async function processDevice(device) {
     try {
-        const url = `https://api.thingspeak.com/channels/${device.channel}/feeds.json?api_key=${device.key}&results=1`;
-        const res = await axios.get(url, { timeout: 3000 });
-        const latestFeed = res.data.feeds?.[0];
+        const feeds = await fetchSixHourData(device.channel, device.key);
+        if (!feeds.length) return;
 
-        if (!latestFeed) return;
+        // CRITICAL FIX: Use centralized processing logic
+        const telemetryData = deviceState.processThingSpeakData(device, feeds);
+        if (!telemetryData) return;
 
-        // Compare timestamps to see if it's NEW data
-        const cacheKey = `status_${device.id}`;
-        const cachedLastSeen = cacheService.get(cacheKey);
-        
-        const lastKnownTime = cachedLastSeen || device.last_seen || 0;
-        const newTime = latestFeed.created_at;
+        // CRITICAL FIX: Update Firestore with standardized payload
+        await deviceState.updateFirestoreTelemetry(device.type, device.id, telemetryData, feeds);
 
-        // Skip if we already broadcasted this exact timestamp recently
-        if (new Date(newTime).getTime() <= new Date(lastKnownTime).getTime()) {
-            return;
-        }
-
-        // --- Process Payload ---
-        const fieldKey = Object.keys(device.mapping).find(k => device.mapping[k].includes("water_level")) || 
-                         (latestFeed.field1 !== undefined ? "field1" : "field2");
-        
-        const distance = parseFloat(latestFeed[fieldKey]) || 0;
-        const validDistance = Math.min(distance / 100, device.depth); 
-        const waterHeight = Math.max(0, device.depth - validDistance); 
-        const levelPercent = Math.min(100, (waterHeight / device.depth) * 100);
-        const volume = (device.capacity * levelPercent) / 100;
-
+        // CRITICAL FIX: Emit real-time update via Socket.IO
         const payload = {
-            device_id: device.id,
-            timestamp: newTime,
-            distance,
-            level_percentage: levelPercent,
-            volume,
-            raw_data: latestFeed
+            deviceId: device.id,
+            percentage: telemetryData.percentage,
+            volume: telemetryData.volume,
+            flow_rate: telemetryData.flow_rate,
+            total_reading: telemetryData.total_reading,
+            lastUpdatedAt: telemetryData.lastUpdatedAt,
+            status: telemetryData.status,
+            raw_data: telemetryData.raw_data
         };
 
-        // Update local cache
-        cacheService.set(cacheKey, newTime, 300);
-
-        // SYNC to Firebase (SaaS Architecture: Throttled Writes to save cost)
-        const lastSyncKey = `last_sync_${device.id}`;
-        const lastSync = cacheService.get(lastSyncKey);
-        const now = new Date();
-        const shouldSyncFull = !lastSync || (now - new Date(lastSync) > 10 * 60 * 1000); 
-
-        // CRITICAL FIX: Always update last_online_at using Server Timestamp for status detection, 
-        // but throttle heavy metadata updates (distance, level) to save Firestore writes.
-        const updateData = {
-            last_online_at: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        if (shouldSyncFull) {
-            Object.assign(updateData, {
-                last_seen: newTime,
-                last_telemetry_fetch: now.toISOString()
-            });
-        }
-
-        db.collection(device.type.toLowerCase()).doc(device.id).update(updateData).then(() => {
-            if (shouldSyncFull) cacheService.set(lastSyncKey, now.toISOString(), 3600);
-            
-            // Debugging Log (Step 8 of requirement)
-            const timeDiff = Math.floor((now - new Date(newTime)) / 1000);
-            console.log(`[StatusCheck] Device: ${device.id} | Last Data: ${newTime} | Delay: ${timeDiff}s | Updating last_online_at`);
-        }).catch(e => console.error("Worker Sync Error:", e.message));
-
-        // BROADCAST to Socket.io via Redis Pub/Sub (SaaS Architecture: Distributed Scaling)
         if (pub) {
-            pub.publish(`telemetry:${device.id}`, JSON.stringify(payload));
+            pub.publish(`device:update:${device.id}`, JSON.stringify(payload));
         } else {
-            // Local fallback for dev/single-instance — matches server.js listener
-            telemetryEvents.emit("telemetry_broadcast", payload);
+            telemetryEvents.emit("device:update", payload);
         }
-
+        
+        console.log(`[TelemetryWorker] Updated ${device.id}: ${telemetryData.percentage.toFixed(1)}% (${telemetryData.status})`);
     } catch (err) {
-        // Silently skip if ThingSpeak blocks us
+        console.error(`[TelemetryWorker] Error processing ${device.id}:`, err.message);
     }
 }
 
@@ -161,7 +121,7 @@ async function runPoll() {
     const devices = await getActiveDevices();
     if (devices.length === 0) return;
 
-    const now = new Date();
+    console.log(`[TelemetryWorker] Processing ${devices.length} devices...`);
 
     // Process in batches so we don't accidentally Ddos Thingspeak
     for (let i = 0; i < devices.length; i += BATCH_SIZE) {
@@ -171,41 +131,21 @@ async function runPoll() {
         await new Promise(resolve => setTimeout(resolve, 50));
     }
 
-    // --- SaaS Architecture: Active Device Heartbeat (30s threshold) ---
-    for (const device of devices) {
-        // Read the last known update time from cache or metadata
-        const cacheKey = `status_${device.id}`;
-        const lastKnownTime = cacheService.get(cacheKey) || device.last_seen;
-        
-        if (lastKnownTime) {
-            const timeSinceLastData = now - new Date(lastKnownTime);
-            // If we haven't received new Telemetry Data in 60+ seconds (missed 2 polls)
-            if (timeSinceLastData > 60000) {
-                // Ensure Firebase knows it's offline (throttle writes via cache limit)
-                const offlineSyncKey = `offline_sync_${device.id}`;
-                if (!cacheService.get(offlineSyncKey)) {
-                    // Update Firestore to remove 'last_online_at' which breaks the 1hr heartbeat
-                    db.collection(device.type.toLowerCase()).doc(device.id).update({
-                        // By leaving last_seen but not updating last_online_at locally,
-                        // the UI will naturally fall into its offline state.
-                        status_note: "Heartbeat Lost"
-                    }).catch(e => console.error("Heartbeat Sync Error:", e.message));
-                    
-                    // Prevent spamming Firestore with offline writes every 5 seconds
-                    cacheService.set(offlineSyncKey, true, 300); // Wait 5 mins before trying again
-                }
-            }
-        }
-    }
+    console.log(`[TelemetryWorker] Poll complete`);
 }
 
 // Start the worker
 function startWorker() {
     console.log(`[TelemetryWorker] Initialized polling every ${POLL_INTERVAL}ms...`);
+    
     // Run immediately once
     runPoll();
+    
     // Then loop
     setInterval(runPoll, POLL_INTERVAL);
+    
+    // CRITICAL FIX: Start dedicated status cron job (runs every 1 minute)
+    startStatusCron();
 }
 
 // Standalone execution support (for Render Background Worker)

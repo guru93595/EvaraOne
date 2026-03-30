@@ -24,7 +24,7 @@ export const KPIAuthoritativeCard = ({
                     </svg>
                 </div>
             </div>
-            <h2 className="text-[42px] font-[800] text-[#1F2937] leading-none tracking-tight">{total.toLocaleString()}</h2>
+            <h2 className="text-[36px] font-[800] text-[#1F2937] leading-none tracking-tight">{total.toLocaleString()}</h2>
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-[#16A34A] shadow-[0_0_8px_rgba(22,163,74,0.4)]" />

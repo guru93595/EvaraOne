@@ -3,7 +3,7 @@ const express = require("express");
 const path = require("path");
 const cors = require("cors");
 const adminRoutes = require("./routes/admin.routes.js");
-const { getDashboardSummary, getHierarchy, getAuditLogs } = require("./controllers/admin.controller.js");
+const { getDashboardSummary, getHierarchy, getAuditLogs, getZoneStats } = require("./controllers/admin.controller.js");
 const { requireAuth, checkOwnership } = require("./middleware/auth.middleware.js");
 const tenantCheck = require("./middleware/tenantCheck.middleware.js");
 const rbac = require("./middleware/rbac.middleware.js");
@@ -162,13 +162,13 @@ io.on("connection", (socket) => {
 const pubSub = cache.getPubSub();
 if (pubSub) {
     const sub = pubSub.sub;
-    sub.psubscribe("telemetry:*");
+    sub.psubscribe("device:update:*");
     sub.on("pmessage", (pattern, channel, message) => {
         try {
             const payload = JSON.parse(message);
-            const deviceId = channel.split(":")[1];
+            const deviceId = channel.split(":")[2];
             if (deviceId) {
-                io.to(`room:${deviceId}`).emit("telemetry_update", payload);
+                io.to(`room:${deviceId}`).emit("device:update", payload);
             }
         } catch (err) {}
     });
@@ -176,9 +176,9 @@ if (pubSub) {
 
 // Local bridge for telemetryWorker (Dev/Single-instance fallback)
 // Node.js EventEmitter doesn't support regex patterns — use explicit wildcard
-telemetryEvents.on("telemetry_broadcast", (payload) => {
-    if (payload && payload.device_id) {
-        io.to(`room:${payload.device_id}`).emit("telemetry_update", payload);
+telemetryEvents.on("device:update", (payload) => {
+    if (payload && payload.deviceId) {
+        io.to(`room:${payload.deviceId}`).emit("device:update", payload);
     }
 });
 
@@ -209,8 +209,7 @@ app.use("/api/v1/nodes", globalSaaSAuth, nodesRoutes);
 app.get("/api/v1/admin/hierarchy", globalSaaSAuth, getHierarchy);
 app.get("/api/v1/admin/audit-logs", globalSaaSAuth, getAuditLogs);
 app.get("/api/v1/stats/dashboard/summary", globalSaaSAuth, getDashboardSummary);
-// Stats route fallback
-app.get("/api/v1/stats/zones", globalSaaSAuth, (req, res) => res.json([]));
+app.get("/api/v1/stats/zones", globalSaaSAuth, getZoneStats);
 
 // Production: Serve frontend static files (MUST be before error handlers)
 if (process.env.NODE_ENV === "production") {

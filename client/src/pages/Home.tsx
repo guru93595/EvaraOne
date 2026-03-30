@@ -3,7 +3,7 @@
  * status panel, and system dashboard.
  */
 import { useState } from "react";
-import { Activity, Droplets, Waves, Database, Zap, ArrowDownCircle } from "lucide-react";
+import { Activity, Waves, Database } from "lucide-react";
 import clsx from "clsx";
 import SharedMap from "../components/map/SharedMap";
 import { useMapDevices } from "../hooks/useMapDevices";
@@ -30,39 +30,25 @@ export const Home = () => {
   // Categories for StatusOverlayPanel
   const categories = [
     {
-      name: "Pump Houses",
-      devices: devices.filter((d: any) => d.asset_type === "pump"),
-      color: "#9333ea",
-      bg: "bg-purple-50",
-      icon: <Zap size={12} className="text-purple-600" />,
-    },
-    {
-      name: "Sumps",
-      devices: devices.filter((d: any) => d.asset_type === "sump"),
-      color: "#16a34a",
-      bg: "bg-green-50",
-      icon: <Droplets size={12} className="text-green-600" />,
-    },
-    {
-      name: "Overhead Tanks",
-      devices: devices.filter((d: any) => d.asset_type === "tank"),
+      name: "EvaraTank",
+      devices: devices.filter((d: any) => ["tank", "sump", "oht"].includes(d.asset_type)),
       color: "#2563eb",
       bg: "bg-blue-50",
       icon: <Database size={12} className="text-blue-600" />,
     },
     {
-      name: "Borewells (IIIT)",
-      devices: devices.filter((d: any) => d.asset_type === "bore"),
+      name: "EvaraFlow",
+      devices: devices.filter((d: any) => ["pump", "pump house", "pump_house"].includes(d.asset_type)),
+      color: "#9333ea",
+      bg: "bg-purple-50",
+      icon: <Activity size={12} className="text-purple-600" />,
+    },
+    {
+      name: "EvaraDeep",
+      devices: devices.filter((d: any) => ["bore", "borewell", "govt", "tube well", "tube_well"].includes(d.asset_type)),
       color: "#eab308",
       bg: "bg-yellow-50",
       icon: <Waves size={12} className="text-yellow-600" />,
-    },
-    {
-      name: "Borewells (Govt)",
-      devices: devices.filter((d: any) => d.asset_type === "govt"),
-      color: "#1e293b",
-      bg: "apple-glass-inner",
-      icon: <ArrowDownCircle size={12} className="text-slate-600" />,
     },
   ];
 

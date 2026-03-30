@@ -22,10 +22,18 @@ export const ProductPieChart = ({
 
     return (
         <div className={clsx("apple-glass-card px-[20px] py-[16px] rounded-[20px] flex flex-col h-full", className)}>
-            <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-2 shrink-0">Product Distribution</span>
-            <div className="flex-1 flex items-center gap-3 min-h-0">
+            <div className="flex justify-between items-start mb-2 shrink-0">
+                <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em]">Product Distribution</span>
+                <div className="w-6 h-6 rounded-full bg-blue-50/50 flex items-center justify-center border border-blue-100/20">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3A7AFE" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                    </svg>
+                </div>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-0 pt-2">
                 {/* Pie */}
-                <div className="flex-shrink-0" style={{ width: 80, height: 80 }}>
+                <div className="flex-1 w-full" style={{ minHeight: '80px' }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             <Tooltip
@@ -36,7 +44,7 @@ export const ProductPieChart = ({
                                 cx="50%"
                                 cy="50%"
                                 innerRadius={0}
-                                outerRadius="90%"
+                                outerRadius="98%"
                                 dataKey="value"
                                 stroke="rgba(255,255,255,0.5)"
                                 strokeWidth={2}
@@ -48,12 +56,12 @@ export const ProductPieChart = ({
                         </PieChart>
                     </ResponsiveContainer>
                 </div>
-                {/* Legend on the right */}
-                <div className="flex flex-col gap-2">
+                {/* Legend at bottom */}
+                <div className="flex flex-row flex-wrap justify-center gap-x-6 gap-y-1">
                     {data.map((item) => (
                         <div key={item.name} className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                            <span className="text-[10px] font-[700] text-gray-500 uppercase tracking-tight">{item.name}</span>
+                            <span className="text-[10px] font-[800] text-gray-500 uppercase tracking-tight">{item.name}</span>
                         </div>
                     ))}
                 </div>

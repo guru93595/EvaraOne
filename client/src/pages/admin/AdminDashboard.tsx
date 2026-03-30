@@ -1,9 +1,9 @@
 import { useState } from "react"; // HMR Re-trigger
-import { Users, Network, Map, MapPin, Settings, Activity } from "lucide-react";
+import { Users, Network, MapPin, Settings, Activity } from "lucide-react";
 import { useToast } from "../../components/ToastProvider";
 import { ActionCard } from "../../components/admin/ActionCard";
 import { Modal } from "../../components/ui/Modal";
-import { AddCommunityForm } from "../../components/admin/forms/AddCommunityForm";
+
 import { AddCustomerForm } from "../../components/admin/forms/AddCustomerForm";
 import { AddDeviceForm } from "../../components/admin/forms/AddDeviceForm";
 import { AddZoneForm } from "../../components/admin/forms/AddZoneForm";
@@ -11,7 +11,7 @@ import { ConfigForm } from "../../components/admin/forms/ConfigForm";
 import { AdminStatItem } from "../../components/admin/AdminStatItem";
 import { useDashboardSummary } from "../../hooks/useDashboardSummary";
 
-type ModalType = "zone" | "community" | "customer" | "device" | "config" | null;
+type ModalType = "zone" | "customer" | "device" | "config" | null;
 
 const AdminDashboard = () => {
   const { showToast } = useToast();
@@ -22,7 +22,7 @@ const AdminDashboard = () => {
   const totalDevices = stats?.total_nodes || 0;
   const activeAlerts = stats?.alerts_active || 0;
   const totalCustomers = stats?.total_customers || 0;
-  const totalCommunities = stats?.total_communities || 0;
+
   const healthPercentage = stats?.system_health || 100;
 
   const handleAction = (type: ModalType) => {
@@ -36,9 +36,7 @@ const AdminDashboard = () => {
       if (activeModal === "zone") {
         showToast("Zone created successfully!", "success");
       }
-      if (activeModal === "community") {
-        showToast("Community created successfully!", "success");
-      }
+
       if (activeModal === "customer") {
         showToast("Customer registered and credentials synced!", "success");
       }
@@ -112,22 +110,14 @@ const AdminDashboard = () => {
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <ActionCard
             title="Create Zone"
             description="Define new geographic zones and operational zones."
             icon={MapPin}
             color="indigo"
-            stats={`${totalCommunities} Active`}
+            stats={`${totalDevices} Active`}
             onClick={() => handleAction("zone")}
-          />
-          <ActionCard
-            title="Add Community"
-            description="Create new residential communities for grouping nodes."
-            icon={Map}
-            color="blue"
-            stats={`${totalCommunities} Zones`}
-            onClick={() => handleAction("community")}
           />
           <ActionCard
             title="Add Customer"
@@ -166,14 +156,7 @@ const AdminDashboard = () => {
         <AddZoneForm onSubmit={handleFormSuccess} onCancel={handleClose} />
       </Modal>
 
-      <Modal
-        isOpen={activeModal === "community"}
-        onClose={handleClose}
-        title="Add New Community"
-        animation="slide-right"
-      >
-        <AddCommunityForm onSubmit={handleFormSuccess} onCancel={handleClose} />
-      </Modal>
+
 
       <Modal
         isOpen={activeModal === "customer"}

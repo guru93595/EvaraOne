@@ -25,25 +25,27 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /** Derived capacity in litres from tank geometry. */
-export function calcCapacityLiters(config: TankConfig): number {
+export function calcCapacityLiters(config: TankConfig, usableHeightM: number): number {
     if (config.capacity_liters && config.capacity_liters > 0) {
         return config.capacity_liters;
     }
-    const h = config.height_m ?? 0;
-    if (config.tank_shape === 'cylinder') {
+    if (config.tank_shape === 'cylindrical') {
         const r = config.radius_m ?? 0;
-        return Math.PI * r * r * h * 1000;
+        return Math.PI * r * r * usableHeightM * 1000;
     }
     // rectangular (default)
     const l = config.length_m ?? 0;
     const b = config.breadth_m ?? 0;
-    return l * b * h * 1000;
+    return l * b * usableHeightM * 1000;
 }
 
-/** Convert raw sensor depth (cm, empty gap from top) → percentage filled (0-100). */
-export function sensorDepthToPercent(sensorDepthCm: number, tankHeightCm: number): number {
-    const waterCm = clamp(tankHeightCm - sensorDepthCm, 0, tankHeightCm);
-    return tankHeightCm > 0 ? (waterCm / tankHeightCm) * 100 : 0;
+/** Convert raw sensor distance (in meters) → percentage filled and water height. */
+export function calculateTankMetrics(distanceM: number, usableHeightM: number) {
+    if (usableHeightM <= 0) return { percent: 0, waterHeightM: 0 };
+    // User formula: Water height = min(Usable tank height, max(0, Usable tank height - Distance reading))
+    const waterHeightM = Math.min(usableHeightM, Math.max(0, usableHeightM - distanceM));
+    const percent = (waterHeightM / usableHeightM) * 100;
+    return { percent, waterHeightM };
 }
 
 /** Format litres smart: ≥1000 L → KL with 2 dp, else L with 0 dp. */
@@ -108,35 +110,53 @@ export function useTankCalcs({
     fallbackHeightM = 13.16,
 }: TankCalcsInput): TankCalcsResult {
     const tankHeightM  = config?.height_m ?? fallbackHeightM;
-    const tankHeightCm = tankHeightM * 100;
+    const deadBandM    = config?.dead_band_m ?? 0;
+    const usableHeightM = Math.max(0, tankHeightM - deadBandM);
 
     // ── Capacity ──────────────────────────────────────────────────────────────
     const capacityLiters = useMemo(() => {
         if (!config) return 0;
-        return calcCapacityLiters(config);
-    }, [config]);
+        return calcCapacityLiters(config, usableHeightM);
+    }, [config, usableHeightM]);
 
     // ── Current percentage & volume ───────────────────────────────────────────
     const { percentage, volumeLiters, temperatureCelsius } = useMemo(() => {
         if (!telemetryData) return { percentage: 0, volumeLiters: 0, temperatureCelsius: null };
 
         let pct: number;
-        if (telemetryData.level_percentage != null) {
-            pct = clamp(Number(telemetryData.level_percentage), 0, 100);
-        } else {
-            const raw = Number(telemetryData.data?.field1 ?? 0);
-            pct = sensorDepthToPercent(isNaN(raw) ? 0 : raw, tankHeightCm);
+        let vol: number;
+        const cap = capacityLiters > 0 ? capacityLiters : usableHeightM * 1000; // rough fallback
+
+        if (telemetryData.level_percentage != null && false /* disabled directly trusting level config over new formula */) {
+             // If we must trust raw percentage from firmware, we do it here.
+             // But the user requested strict formulas based on distance.
         }
 
-        const cap = capacityLiters > 0 ? capacityLiters : fallbackHeightM * 1000; // rough fallback
-        const vol = clamp((pct / 100) * cap, 0, cap);
+        const rawCm = Number(telemetryData.data?.field1 ?? telemetryData.level_percentage ?? 0); // fallback distance
+        const distanceM = (isNaN(rawCm) ? 0 : rawCm) / 100;
+        
+        const metrics = calculateTankMetrics(distanceM, usableHeightM);
+        pct = metrics.percent;
+        
+        // Exact volume calculation per user formula based on derived waterHeightM
+        if (config?.capacity_liters && config.capacity_liters > 0) {
+            // Pre-defined capacity ignores L/B, relies on %
+            vol = clamp((pct / 100) * cap, 0, cap);
+        } else if (config?.tank_shape === 'cylindrical') {
+            const r = config?.radius_m ?? 0;
+            vol = Math.PI * r * r * metrics.waterHeightM * 1000;
+        } else {
+            const l = config?.length_m ?? 0;
+            const b = config?.breadth_m ?? 0;
+            vol = l * b * metrics.waterHeightM * 1000;
+        }
 
         const temp = telemetryData.temperature_value != null
             ? Number(telemetryData.temperature_value)
             : null;
 
-        return { percentage: pct, volumeLiters: vol, temperatureCelsius: isNaN(temp!) ? null : temp };
-    }, [telemetryData, tankHeightCm, capacityLiters, fallbackHeightM]);
+        return { percentage: pct, volumeLiters: Number(vol.toFixed(2)), temperatureCelsius: isNaN(temp!) ? null : temp };
+    }, [telemetryData, usableHeightM, capacityLiters, config]);
 
     // ── History charts ────────────────────────────────────────────────────────
     const { levelData, volumeData } = useMemo(() => {
@@ -148,23 +168,30 @@ export function useTankCalcs({
             const d = new Date(feed.created_at ?? '');
             const timeStr = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 
-            let lvl: number;
-            if (feed.level_percentage != null) {
-                lvl = clamp(Number(feed.level_percentage), 0, 100);
-            } else {
-                const raw = Number(feed.field1 ?? 0);
-                lvl = sensorDepthToPercent(isNaN(raw) ? 0 : raw, tankHeightCm);
-            }
+            const rawCm = Number(feed.field1 ?? feed.level_percentage ?? 0);
+            const distanceM = (isNaN(rawCm) ? 0 : rawCm) / 100;
+            const metrics = calculateTankMetrics(distanceM, usableHeightM);
+            const lvl = metrics.percent;
 
-            const cap = capacityLiters > 0 ? capacityLiters : fallbackHeightM * 1000;
-            const vol = clamp((lvl / 100) * cap, 0, cap);
+            let vol = 0;
+            if (config?.capacity_liters && config.capacity_liters > 0) {
+                const cap = capacityLiters > 0 ? capacityLiters : usableHeightM * 1000;
+                vol = clamp((lvl / 100) * cap, 0, cap);
+            } else if (config?.tank_shape === 'cylindrical') {
+                const r = config?.radius_m ?? 0;
+                vol = Math.PI * r * r * metrics.waterHeightM * 1000;
+            } else {
+                const l = config?.length_m ?? 0;
+                const b = config?.breadth_m ?? 0;
+                vol = l * b * metrics.waterHeightM * 1000;
+            }
 
             levelArr.push({ time: timeStr, level: Math.round(lvl * 10) / 10 });
             volArr.push({ time: timeStr, volume: Math.round(vol * 10) / 10 });
         }
 
         return { levelData: levelArr, volumeData: volArr };
-    }, [historyFeeds, tankHeightCm, capacityLiters, fallbackHeightM]);
+    }, [historyFeeds, usableHeightM, capacityLiters, config]);
 
     // ── Consumption trend ─────────────────────────────────────────────────────
     const { dailyConsumptionL, weeklyConsumptionL, trend } = useMemo(() => {
@@ -175,20 +202,20 @@ export function useTankCalcs({
         const older  = feeds.slice(-20, -10);
 
         const getLvl = (f: TelemetryFeed) => {
-            if (f.level_percentage != null) return clamp(Number(f.level_percentage), 0, 100);
-            const raw = Number(f.field1 ?? 0);
-            return sensorDepthToPercent(isNaN(raw) ? 0 : raw, tankHeightCm);
+            const rawCm = Number(f.field1 ?? f.level_percentage ?? 0);
+            const distanceM = (isNaN(rawCm) ? 0 : rawCm) / 100;
+            return calculateTankMetrics(distanceM, usableHeightM).percent;
         };
 
         const recentAvg = recent.reduce((s, f) => s + getLvl(f), 0) / recent.length;
         const olderAvg  = older.length ? older.reduce((s, f) => s + getLvl(f), 0) / older.length : recentAvg;
 
         const tr: 'up' | 'down' | 'stable' = recentAvg > olderAvg + 2 ? 'up' : recentAvg < olderAvg - 2 ? 'down' : 'stable';
-        const cap = capacityLiters > 0 ? capacityLiters : fallbackHeightM * 1000;
+        const cap = capacityLiters > 0 ? capacityLiters : usableHeightM * 1000;
         const daily = Math.round(Math.abs(recentAvg - olderAvg) / 100 * cap * 2);
 
         return { dailyConsumptionL: daily, weeklyConsumptionL: daily * 7, trend: tr };
-    }, [historyFeeds, tankHeightCm, capacityLiters, fallbackHeightM]);
+    }, [historyFeeds, usableHeightM, capacityLiters]);
 
     return {
         percentage,

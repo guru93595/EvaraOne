@@ -54,8 +54,6 @@ export const WaterAnalyticsCards: React.FC<WaterAnalyticsCardsProps> = ({ analyt
     );
   }
 
-  const isFilling = analytics.fillRateLpm > 0;
-  const isDraining = analytics.drainRateLpm > 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -109,18 +107,18 @@ export const WaterAnalyticsCards: React.FC<WaterAnalyticsCardsProps> = ({ analyt
       
       <Card 
         title="Fill Rate" 
-        value={isFilling ? formatRate(analytics.fillRateLpm, true) : '--'} 
+        value={analytics.fillRateLpm > 0 && analytics.fillRateLpm <= 500 ? formatRate(analytics.fillRateLpm, true) : analytics.fillRateLpm > 500 ? 'Invalid reading' : '--'} 
         unit="" 
         icon="trending_up"
-        highlight={isFilling ? 'positive' : 'neutral'}
+        highlight={analytics.fillRateLpm > 0 && analytics.fillRateLpm <= 500 ? 'positive' : analytics.fillRateLpm > 500 ? 'negative' : 'neutral'}
       />
       
       <Card 
         title="Drain Rate" 
-        value={isDraining ? formatRate(analytics.drainRateLpm, false) : '--'} 
+        value={analytics.drainRateLpm > 0 && analytics.drainRateLpm <= 500 ? formatRate(analytics.drainRateLpm, false) : analytics.drainRateLpm > 500 ? 'Invalid reading' : '--'} 
         unit="" 
         icon="trending_down"
-        highlight={isDraining ? 'negative' : 'neutral'}
+        highlight={analytics.drainRateLpm > 0 && analytics.drainRateLpm <= 500 ? 'negative' : analytics.drainRateLpm > 500 ? 'negative' : 'neutral'}
       />
       
       <Card 
@@ -137,6 +135,70 @@ export const WaterAnalyticsCards: React.FC<WaterAnalyticsCardsProps> = ({ analyt
         unit="" 
         icon="schedule"
         highlight={analytics.estimatedFullTimeMinutes && analytics.estimatedFullTimeMinutes < 30 ? 'positive' : 'neutral'}
+      />
+
+      <Card 
+        title="Refills Today" 
+        value={analytics.refillsToday} 
+        unit="times" 
+        icon="autorenew"
+        highlight={analytics.refillsToday > 0 ? 'positive' : 'neutral'}
+      />
+
+      <Card 
+        title="Last Refill Time" 
+        value={analytics.lastRefillTime ? new Date(analytics.lastRefillTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'} 
+        unit="" 
+        icon="update"
+        highlight="neutral"
+      />
+
+      <Card 
+        title="Avg Refill Time" 
+        value={formatTimeDuration(analytics.avgRefillTimeMinutes)} 
+        unit="" 
+        icon="hourglass_top"
+        highlight="neutral"
+      />
+
+      <Card 
+        title="Today's Consumption" 
+        value={`${(analytics.todaysConsumptionLiters / 1000).toFixed(2)}`} 
+        unit="KL" 
+        icon="water_drop"
+        highlight="neutral"
+      />
+
+      <Card 
+        title="Peak Consumption Time" 
+        value={analytics.peakConsumptionTime ? new Date(analytics.peakConsumptionTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'} 
+        unit="" 
+        icon="query_builder"
+        highlight="neutral"
+      />
+
+      <Card 
+        title="Peak Consumption Rate" 
+        value={analytics.peakConsumptionRateLpm ? `${analytics.peakConsumptionRateLpm.toFixed(1)} L/min` : '--'} 
+        unit="" 
+        icon="speed"
+        highlight="neutral"
+      />
+
+      <Card 
+        title="Peak Drain Time" 
+        value={analytics.peakDrainTime ? new Date(analytics.peakDrainTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'} 
+        unit="" 
+        icon="calendar_clock"
+        highlight="neutral"
+      />
+
+      <Card 
+        title="Peak Drain Vol" 
+        value={analytics.peakDrainVolumeLiters ? `${analytics.peakDrainVolumeLiters.toFixed(0)}` : '--'} 
+        unit="L" 
+        icon="waterfall_chart"
+        highlight="neutral"
       />
     </div>
   );

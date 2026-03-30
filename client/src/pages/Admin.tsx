@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { AddZoneForm } from "../components/admin/forms/AddZoneForm";
-import { AddCommunityForm } from "../components/admin/forms/AddCommunityForm";
+
 import { AddCustomerForm } from "../components/admin/forms/AddCustomerForm";
 import { AddDeviceForm } from "../components/admin/forms/AddDeviceForm";
 import { ActionCard } from "../components/admin/ActionCard";
@@ -19,7 +19,6 @@ import {
   type LucideIcon,
   PlusCircle,
   Activity,
-  LayoutGrid,
   Map as MapIcon,
   RefreshCw,
 } from "lucide-react";
@@ -27,35 +26,28 @@ import { useTenancy } from "../context/TenancyContext";
 import { UsageMeter } from "../components/admin/UsageMeter";
 import clsx from "clsx";
 
-interface Profile {
-  id: string;
-  email: string;
-  full_name?: string;
-  role: string;
-}
 
-interface Community {
+
+interface Customer {
   id: string;
-  name: string;
-  profiles: Profile[];
+  display_name?: string;
+  full_name?: string;
 }
 
 interface Zone {
   id: string;
   name: string;
-  communities: Community[];
+  zoneName?: string;
+  customers: Customer[];
 }
 
 interface AdminStats {
   total_nodes: number;
   online_nodes: number;
-  active_alerts: number;
+  alerts_active: number;
   total_customers: number;
-  total_regions: number;
-  total_communities: number;
-  weekly_growth: number;
+  total_zones: number;
   system_health: number;
-  system_stability: number;
 }
 
 /* ─── Widget Card Component ─── */
@@ -273,7 +265,7 @@ const Admin = () => {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [activeForm, setActiveForm] = useState<
-    "zone" | "community" | "customer" | "node" | null
+    "zone" | "customer" | "node" | null
   >(null);
   const [notification, setNotification] = useState<{
     type: "success" | "error";
@@ -296,9 +288,7 @@ const Admin = () => {
   const { data: stats, isLoading: loadingStats } = useQuery<AdminStats>({
     queryKey: ["admin_stats", selectedDistributorId],
     queryFn: () =>
-      adminService.getStats(
-        selectedDistributorId || undefined,
-      ) as Promise<AdminStats>,
+      adminService.getStats() as Promise<AdminStats>,
     enabled: isAuthenticated,
     refetchInterval: 1000 * 60 * 5, // Refresh every 5 minutes (saves reads)
   });
@@ -306,7 +296,7 @@ const Admin = () => {
   const { data: auditLogs = [] } = useQuery<any[]>({
     queryKey: ["admin_audit_logs", selectedDistributorId],
     queryFn: () =>
-      adminService.getAuditLogs(15, selectedDistributorId || undefined),
+      adminService.getAuditLogs(),
     enabled: isAuthenticated && user?.role === "superadmin",
   });
 
@@ -521,25 +511,19 @@ const Admin = () => {
               style={{
                 gridColumn: "span 3",
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(3, 1fr)",
                 gap: "16px",
                 marginBottom: "8px",
               }}
             >
               <StatPill
                 icon="🌍"
-                value={String(stats?.total_regions || 0)}
+                value={String(stats?.total_zones || 0)}
                 label="TOTAL ZONES"
                 color="#6366F1"
                 trend="Geographic"
               />
-              <StatPill
-                icon="🏘️"
-                value={String(stats?.total_communities || 0)}
-                label="COMMUNITIES"
-                color="#3B82F6"
-                trend="Operational"
-              />
+
               <StatPill
                 icon="👥"
                 value={String(stats?.total_customers || 0)}
@@ -552,11 +536,7 @@ const Admin = () => {
                 value={String(stats?.total_nodes || 0)}
                 label="TOTAL DEVICES"
                 color="#10B981"
-                trend={
-                  stats?.weekly_growth
-                    ? `+${stats.weekly_growth} new`
-                    : "Stable"
-                }
+                trend="Stable"
               />
             </div>
 
@@ -565,7 +545,7 @@ const Admin = () => {
               style={{
                 gridColumn: "span 3",
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(3, 1fr)",
                 gap: "16px",
                 marginBottom: "8px",
               }}
@@ -577,13 +557,7 @@ const Admin = () => {
                 description="Define geographical zone"
                 onClick={() => setActiveForm("zone")}
               />
-              <ActionCard
-                color="blue"
-                icon={LayoutGrid}
-                title="New Community"
-                description="Add residential cluster"
-                onClick={() => setActiveForm("community")}
-              />
+
               <ActionCard
                 color="purple"
                 icon={Users}
@@ -605,7 +579,7 @@ const Admin = () => {
               icon={Globe}
               iconBg="#6366F1"
               title="Infrastructure Mapping"
-              summary={`${hierarchy.length} Zones · ${hierarchy.reduce((acc, r) => acc + (r.communities?.length || 0), 0)} Communities`}
+              summary={`${hierarchy.length} Zones · ${hierarchy.reduce((acc, r: any) => acc + (r.customers?.length || 0), 0)} Customers`}
               expanded={expanded === "infra"}
               onClick={() => toggle("infra")}
             >
@@ -621,16 +595,16 @@ const Admin = () => {
                         {zone.name}
                       </h3>
                       <span className="text-[10px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                        {zone.communities?.length || 0} Clusters
+                        {(zone as any).customers?.length || 0} Customers
                       </span>
                     </div>
                     <div className="space-y-2">
-                      {zone.communities?.map((c) => (
+                      {(zone as any).customers?.map((c: any) => (
                         <div
                           key={c.id}
                           className="text-xs text-slate-500 font-semibold pl-4 border-l-2 border-slate-200 flex items-center justify-between"
                         >
-                          {c.name}
+                          {c.display_name || c.full_name}
                           <span className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-400">
                             →
                           </span>
@@ -678,7 +652,7 @@ const Admin = () => {
                 />
                 <StatPill
                   icon="⚠️"
-                  value={String(stats?.active_alerts || 0)}
+                  value={String(stats?.alerts_active || 0)}
                   label="CRITICAL"
                   color="#EF4444"
                 />
@@ -716,7 +690,7 @@ const Admin = () => {
                   Alerts
                 </span>
                 <span className="text-2xl font-black text-rose-900 leading-none">
-                  {stats?.active_alerts || 0}
+                  {stats?.alerts_active || 0}
                 </span>
               </div>
             </div>
@@ -873,7 +847,6 @@ const Admin = () => {
                   }}
                 >
                   {activeForm === "zone" && "🌍 Create New Zone"}
-                  {activeForm === "community" && "🏠 Add Community"}
                   {activeForm === "customer" && "👥 Add New User"}
                   {activeForm === "node" && "📡 Provision Hardware"}
                 </h2>
@@ -892,12 +865,6 @@ const Admin = () => {
               {activeForm === "zone" && (
                 <AddZoneForm
                   onSubmit={() => onCreationSuccess("Zone")}
-                  onCancel={() => setActiveForm(null)}
-                />
-              )}
-              {activeForm === "community" && (
-                <AddCommunityForm
-                  onSubmit={() => onCreationSuccess("Community")}
                   onCancel={() => setActiveForm(null)}
                 />
               )}

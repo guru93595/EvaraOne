@@ -35,7 +35,6 @@ const AdminNodes = () => {
     node_key: "",
     category: "OHT" as NodeCategory,
     zone_id: "",
-    community_id: "",
     customer_id: "",
     location_name: "",
     lat: "",
@@ -97,17 +96,10 @@ const AdminNodes = () => {
       const zone = hierarchy.find((z) => z.id === node.zoneId);
       if (zone) {
         zoneName = zone.zoneName;
-        const comm = zone.communities?.find(
-          (c: any) => c.id === node.communityId,
-        );
-        if (comm) {
-          communityName = comm.name;
-          const cust = comm.customers?.find(
-            (cu: any) => cu.id === node.customerId,
-          );
-          if (cust) {
-            customerName = cust.display_name || cust.full_name;
-          }
+        // Search all customers in the zone
+        const cust = (zone.customers || []).find((cu: any) => cu.id === node.customerId);
+        if (cust) {
+          customerName = cust.display_name || cust.full_name;
         }
       }
 
@@ -142,7 +134,6 @@ const AdminNodes = () => {
         assetType,
         assetSubType: formData.category,
         zoneId: formData.zone_id,
-        communityId: formData.community_id,
         customerId: formData.customer_id,
         latitude: parseFloat(formData.lat) || 0,
         longitude: parseFloat(formData.lng) || 0,
@@ -161,7 +152,6 @@ const AdminNodes = () => {
         node_key: "",
         category: "OHT",
         zone_id: "",
-        community_id: "",
         customer_id: "",
         location_name: "",
         lat: "",
@@ -195,25 +185,19 @@ const AdminNodes = () => {
 
   // Memoized selection options
   const zonesList = useMemo(() => hierarchy, [hierarchy]);
-  const communitiesList = useMemo(() => {
-    const zone = zonesList.find((z) => z.id === formData.zone_id);
-    return zone ? zone.communities : [];
-  }, [zonesList, formData.zone_id]);
   const customersList = useMemo(() => {
-    const comm = (communitiesList || []).find(
-      (c: any) => c.id === formData.community_id,
-    );
-    return comm ? comm.customers : [];
-  }, [communitiesList, formData.community_id]);
+    const zone = zonesList.find((z) => z.id === formData.zone_id);
+    return zone ? zone.customers : [];
+  }, [zonesList, formData.zone_id]);
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900">
+          <h2 className="text-3xl font-bold text-[#1F2937]">
             Infrastructure Asset Registry
           </h2>
-          <p className="text-slate-500 mt-1">
+          <p className="text-[#4B5563] mt-1 font-medium opacity-80">
             Provision and manage nodes, tanks, and telemetry sources.
           </p>
         </div>
@@ -228,13 +212,13 @@ const AdminNodes = () => {
         <div className="lg:col-span-2 space-y-6">
           <form
             onSubmit={handleSubmit}
-            className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden"
+            className="bg-white/10 backdrop-blur-2xl rounded-3xl shadow-xl border border-white/20 overflow-hidden"
           >
-            <div className="px-8 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <div className="px-8 py-4 bg-white/10 border-b border-white/10 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#1F2937] opacity-60 uppercase tracking-widest">
                 New Asset Provisioning
               </span>
-              <Server className="w-4 h-4 text-slate-300" />
+              <Server className="w-4 h-4 text-[#1F2937] opacity-40" />
             </div>
 
             <div className="p-8 space-y-6">
@@ -301,24 +285,22 @@ const AdminNodes = () => {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">
-                      Zone
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                       Zone
                     </label>
                     <select
-                      className="w-full px-2 py-3 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                       value={formData.zone_id}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
                           zone_id: e.target.value,
-                          community_id: "",
                           customer_id: "",
                         })
                       }
                     >
-                      <option value="">Select</option>
+                      <option value="">Select Zone</option>
                       {zonesList.map((z) => (
                         <option key={z.id} value={z.id}>
                           {z.zoneName}
@@ -327,37 +309,13 @@ const AdminNodes = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">
-                      Community
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                       Customer
                     </label>
                     <select
-                      className="w-full px-2 py-3 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none bg-white disabled:bg-slate-50"
-                      value={formData.community_id}
-                      disabled={!formData.zone_id}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          community_id: e.target.value,
-                          customer_id: "",
-                        })
-                      }
-                    >
-                      <option value="">Select</option>
-                      {communitiesList?.map((c: any) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">
-                      Customer
-                    </label>
-                    <select
-                      className="w-full px-2 py-3 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none bg-white disabled:bg-slate-50"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white disabled:bg-slate-50"
                       value={formData.customer_id}
-                      disabled={!formData.community_id}
+                      disabled={!formData.zone_id}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
@@ -365,7 +323,7 @@ const AdminNodes = () => {
                         })
                       }
                     >
-                      <option value="">Select</option>
+                      <option value="">Select Customer</option>
                       {customersList?.map((c: any) => (
                         <option key={c.id} value={c.id}>
                           {c.display_name || c.full_name}
@@ -373,7 +331,6 @@ const AdminNodes = () => {
                       ))}
                     </select>
                   </div>
-                </div>
               </div>
 
               {/* GPS & Capacity */}
@@ -478,7 +435,7 @@ const AdminNodes = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 transition-all transform active:scale-[0.98] shadow-lg shadow-slate-200 disabled:opacity-50 mt-4"
+                className="px-8 py-3 rounded-2xl bg-[#3A7AFE] text-white font-bold text-sm shadow-xl shadow-blue-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -494,7 +451,7 @@ const AdminNodes = () => {
         </div>
 
         {/* Info Card */}
-        <div className="bg-gradient-to-br from-emerald-900 to-teal-900 rounded-3xl p-8 text-white shadow-xl flex flex-col justify-between overflow-hidden relative">
+        <div className="bg-gradient-to-br from-[#1E3A8A] to-[#1D4ED8] rounded-3xl p-8 text-white shadow-xl flex flex-col justify-between overflow-hidden relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl animate-pulse" />
           <div>
             <Activity className="w-12 h-12 text-emerald-400 mb-6" />
@@ -525,7 +482,7 @@ const AdminNodes = () => {
       </div>
 
       {/* Nodes Table - Task 3 */}
-      <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm">
+      <div className="bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 overflow-hidden shadow-xl">
         <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
           <div>
             <h3 className="font-extrabold text-slate-800 text-lg">
@@ -558,7 +515,7 @@ const AdminNodes = () => {
                   Asset Type
                 </th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Zone / Community
+                  Zone Membership
                 </th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   Customer
@@ -626,10 +583,6 @@ const AdminNodes = () => {
                     <td className="px-8 py-5">
                       <div className="text-xs font-black text-slate-700 uppercase tracking-tight">
                         {node.zoneName}
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 font-medium flex items-center gap-1">
-                        <MapPin size={10} className="text-slate-300" />
-                        {node.communityName}
                       </div>
                     </td>
                     <td className="px-8 py-5">
