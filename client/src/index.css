@@ -113,6 +113,12 @@
   --offline-border: #dc2626;
   --offline-dot: #ef4444;
   --offline-bg: rgba(255, 255, 255, 0.7);
+
+  /* Zone Badges */
+  --zone-badge-bg: rgba(37, 99, 235, 0.15);
+  --zone-badge-text: #1d4ed8;
+  --zone-badge-border: rgba(37, 99, 235, 0.4);
+  --zone-badge-icon: #2563eb;
 }
 
 .dark {
@@ -182,6 +188,12 @@ html.dark {
   --offline-border: #ef4444;
   --offline-dot: #f87171;
   --offline-bg: rgba(255, 255, 255, 0.05);
+
+  /* Zone Badges */
+  --zone-badge-bg: rgba(96, 165, 250, 0.2);
+  --zone-badge-text: #60a5fa;
+  --zone-badge-border: rgba(96, 165, 250, 0.4);
+  --zone-badge-icon: #60a5fa;
 }
 
 .node-label { color: var(--node-label-color); }
@@ -241,6 +253,21 @@ html.dark {
 }
 .badge-offline-dot {
   background-color: var(--offline-dot);
+}
+
+/* Zone Badge Utilities */
+.zone-badge {
+  background-color: var(--zone-badge-bg) !important;
+  color: var(--zone-badge-text) !important;
+  border: 1px solid var(--zone-badge-border) !important;
+  backdrop-filter: blur(8px);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.zone-badge-icon {
+  color: var(--zone-badge-icon) !important;
+  opacity: 1 !important;
 }
 
 html.dark .device-type-badge {

@@ -146,8 +146,8 @@ const RegionsOverview = () => {
             >
               <div className="apple-glass-content relative flex flex-col h-full p-[24px]">
                 {/* Background Icon */}
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-                  <MapPin size={80} className="text-[#3A7AFE]" />
+                <div className="absolute top-0 right-0 p-4 transition-opacity pointer-events-none">
+                  <MapPin size={80} className="zone-badge-icon" style={{ opacity: 0.1 }} />
                 </div>
 
                 {/* Header */}
@@ -174,7 +174,8 @@ const RegionsOverview = () => {
                     </div>
                   </div>
                   {zone?.zone_code && (
-                    <span className="px-[8px] py-[4px] bg-[rgba(255,255,255,0.4)] dark:bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.5)] dark:border-[rgba(255,255,255,0.2)] text-[#1F2937] dark:text-white text-[10px] font-[700] rounded-[6px] uppercase shadow-sm">
+                    <span className="flex items-center gap-1.5 px-[10px] py-[4px] zone-badge text-[11px] rounded-[8px] uppercase shadow-sm">
+                      <MapPin size={12} className="zone-badge-icon" />
                       {zone?.zone_code}
                     </span>
                   )}
