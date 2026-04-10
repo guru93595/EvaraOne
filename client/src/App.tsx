@@ -57,11 +57,7 @@ const GlobalBackground = ({ children }: { children: React.ReactNode }) => {
         <div className={isMap ? '' : 'app-global-bg'}>
             {!isMap && (
                 <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-[#3A7AFE]/10 blur-[160px] animate-blob mix-blend-multiply opacity-50"></div>
-                    <div className="absolute top-[20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#CFEDE6]/20 blur-[180px] animate-blob animation-delay-2000 mix-blend-multiply opacity-40"></div>
-                    <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[60%] rounded-full bg-[#D7ECFF]/20 blur-[160px] animate-blob animation-delay-4000 mix-blend-multiply opacity-30"></div>
-                    {/* Additional overlay blur to enhance glass textures */}
-                    <div className="absolute inset-0 backdrop-blur-[4px] z-0"></div>
+                    <div className="absolute inset-0 backdrop-blur-[0px] dark:backdrop-blur-none z-0"></div>
                 </div>
             )}
             <div className="relative z-10 w-full min-h-screen">
@@ -84,56 +80,56 @@ function App() {
                         <ToastProvider>
                             <Router>
                                 <GlobalBackground>
-                                <Suspense fallback={<PageLoader />}>
-                                    <Routes>
-                                        <Route path="/" element={<Navigate to="/login" replace />} />
-                                        <Route path="/login" element={<Login />} />
+                                    <Suspense fallback={<PageLoader />}>
+                                        <Routes>
+                                            <Route path="/" element={<Navigate to="/login" replace />} />
+                                            <Route path="/login" element={<Login />} />
 
-                                        <Route element={<ProtectedRoute />}>
-                                            <Route element={<MainLayout />}>
-                                                <Route path="/map" element={<Home />} />
-                                                <Route path="/dashboard" element={<Dashboard />} />
-                                                <Route path="/nodes" element={<AllNodes />} />
-                                                <Route path="/node/:id" element={<NodeDetails />} />
-                                                <Route path="/configure/:id" element={<ConfigureNode />} />
-                                                <Route path="/configure-flow/:id" element={<ConfigureFlow />} />
-                                                <Route path="/evaratank" element={<EvaraTankAnalytics />} />
-                                                <Route path="/evaratank/:hardwareId" element={<EvaraTankAnalytics />} />
-                                                <Route path="/evaradeep" element={<EvaraDeepAnalytics />} />
-                                                <Route path="/evaradeep/:hardwareId" element={<EvaraDeepAnalytics />} />
-                                                <Route path="/evaraflow" element={<EvaraFlowAnalytics />} />
-                                                <Route path="/evaraflow/:hardwareId" element={<EvaraFlowAnalytics />} />
-                                                <Route path="/admin" element={<Admin />} />
-                                            </Route>
+                                            <Route element={<ProtectedRoute />}>
+                                                <Route element={<MainLayout />}>
+                                                    <Route path="/map" element={<Home />} />
+                                                    <Route path="/dashboard" element={<Dashboard />} />
+                                                    <Route path="/nodes" element={<AllNodes />} />
+                                                    <Route path="/node/:id" element={<NodeDetails />} />
+                                                    <Route path="/configure/:id" element={<ConfigureNode />} />
+                                                    <Route path="/configure-flow/:id" element={<ConfigureFlow />} />
+                                                    <Route path="/evaratank" element={<EvaraTankAnalytics />} />
+                                                    <Route path="/evaratank/:hardwareId" element={<EvaraTankAnalytics />} />
+                                                    <Route path="/evaradeep" element={<EvaraDeepAnalytics />} />
+                                                    <Route path="/evaradeep/:hardwareId" element={<EvaraDeepAnalytics />} />
+                                                    <Route path="/evaraflow" element={<EvaraFlowAnalytics />} />
+                                                    <Route path="/evaraflow/:hardwareId" element={<EvaraFlowAnalytics />} />
+                                                    <Route path="/admin" element={<Admin />} />
+                                                </Route>
 
-                                            {/* Admin Routes (Super Admin) */}
-                                            <Route element={<ProtectedRoute allowedRoles={['superadmin']} />}>
-                                                <Route path="/superadmin" element={<AdminLayout />}>
-                                                    <Route index element={<Navigate to="dashboard" replace />} />
-                                                    <Route path="dashboard" element={<AdminDashboard />} />
-                                                    <Route path="customers" element={<AdminCustomers />} />
+                                                {/* Admin Routes (Super Admin) */}
+                                                <Route element={<ProtectedRoute allowedRoles={['superadmin']} />}>
+                                                    <Route path="/superadmin" element={<AdminLayout />}>
+                                                        <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
+                                                        <Route path="dashboard" element={<AdminDashboard />} />
+                                                        <Route path="customers" element={<AdminCustomers />} />
 
-                                                    {/* Hierarchy Routes */}
-                                                    <Route path="zones" element={<ZonesOverview />} />
+                                                        {/* Hierarchy Routes */}
+                                                        <Route path="zones" element={<ZonesOverview />} />
 
-                                                    <Route path="customers/:customerId" element={
-                                                        <ErrorBoundary>
-                                                            <CustomerDetails />
-                                                        </ErrorBoundary>
-                                                    } />
-                                                    <Route path="zones/:regionId/customers" element={<ZoneCustomers />} />
+                                                        <Route path="customers/:customerId" element={
+                                                            <ErrorBoundary>
+                                                                <CustomerDetails />
+                                                            </ErrorBoundary>
+                                                        } />
+                                                        <Route path="zones/:regionId/customers" element={<ZoneCustomers />} />
 
-                                                    {/* Legacy route redirects or keep if needed */}
-                                                    <Route path="nodes" element={<Navigate to="zones" replace />} />
+                                                        {/* Legacy route redirects or keep if needed */}
+                                                        <Route path="nodes" element={<Navigate to="zones" replace />} />
 
-                                                    <Route path="config" element={<AdminConfig />} />
+                                                        <Route path="config" element={<AdminConfig />} />
+                                                    </Route>
                                                 </Route>
                                             </Route>
-                                        </Route>
 
-                                        {/* Catch-all redirect to Map */}
-                                    </Routes>
-                                </Suspense>
+                                            {/* Catch-all redirect to Map */}
+                                        </Routes>
+                                    </Suspense>
                                 </GlobalBackground>
                             </Router>
                         </ToastProvider>

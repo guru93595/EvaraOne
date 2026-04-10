@@ -53,8 +53,8 @@ export const useNodes = (searchQuery: string = "") => {
           (n.id || "").toLowerCase().includes(searchLower),
       );
     },
-    refetchInterval: 10000, // Reduced polling frequency as we have socket support
-    staleTime: 5000,
+    refetchInterval: 12000, // Balanced: fetch every 12 seconds (not too aggressive)
+    staleTime: 5000, // Data becomes stale after 5 seconds
     gcTime: 1000 * 60 * 10,
     retry: 1,
   });

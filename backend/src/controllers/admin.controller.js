@@ -842,7 +842,6 @@ exports.updateDeviceVisibility = async (req, res) => {
         const customerId = deviceDoc.data().customer_id;
 
         // Flush customer-facing caches so change reflects immediately
-        await cache.del(`device:${deviceDoc.id}:metadata`);
         await Promise.all([
             cache.flushPrefix("user:"),
             cache.flushPrefix("dashboard_init_"),
@@ -890,7 +889,6 @@ exports.updateDeviceParameters = async (req, res) => {
         });
 
         // Flush customer-facing caches so change reflects immediately
-        await cache.del(`device:${deviceDoc.id}:metadata`);
         await Promise.all([
             cache.flushPrefix("user:"),
             cache.flushPrefix("dashboard_init_")

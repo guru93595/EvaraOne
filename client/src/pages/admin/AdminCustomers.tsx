@@ -8,7 +8,7 @@ import { AddCustomerForm } from "../../components/admin/forms/AddCustomerForm";
 
 const AdminCustomers = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { role, loading: authLoading } = useAuth();
   const [search, setSearch] = useState("");
   const [clients, setClients] = useState<any[]>([]);
 
@@ -39,11 +39,11 @@ const AdminCustomers = () => {
 
 
   const zoneMap = useMemo(
-    () => Object.fromEntries(zones.map((z) => [z.id, z])),
+    () => Object.fromEntries((zones || []).map((z) => [z.id, z])),
     [zones],
   );
 
-  const filteredClients = clients.filter((c) => {
+  const filteredClients = (clients || []).filter((c) => {
     const name = (c.display_name || c.full_name || "").toLowerCase();
     const email = (c.email || "").toLowerCase();
     return (
@@ -53,11 +53,19 @@ const AdminCustomers = () => {
   });
 
 
+  if (loading || authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-[24px]">
         <div>
-          <h2 className="text-[28px] font-[600] tracking-[-0.5px] text-[#1F2937] leading-tight">
+          <h2 className="text-[28px] font-[600] tracking-[-0.5px] text-[var(--text-primary)] leading-tight">
             Customer Management
           </h2>
           <p className="glass-secondary mt-1">
@@ -76,13 +84,13 @@ const AdminCustomers = () => {
               placeholder="Search customers..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.4)] rounded-xl text-sm focus:ring-2 focus:ring-[rgba(58,122,254,0.3)] focus:border-[#3A7AFE] outline-none w-64 shadow-sm text-[#1F2937] placeholder:text-[#1F2937] placeholder:opacity-40 transition-all"
+              className="pl-10 pr-4 py-2 bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-xl text-sm focus:ring-2 focus:ring-[rgba(38,122,254,0.3)] focus:border-[#3A7AFE] outline-none w-64 shadow-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] transition-all"
             />
           </div>
           <button className="p-2 bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.4)] rounded-xl text-[#1F2937] opacity-80 hover:bg-[rgba(255,255,255,0.5)] shadow-sm transition-all">
             <Filter size={18} />
           </button>
-          {user?.role === "superadmin" && (
+          {role === "superadmin" && (
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-2 px-6 py-2.5 rounded-[12px] bg-[#3A7AFE] text-white font-[700] text-[13px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -97,7 +105,7 @@ const AdminCustomers = () => {
         <div className="p-6">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-[rgba(255,255,255,0.1)] text-[11px] font-[600] text-[#1F2937] opacity-70 uppercase tracking-wider">
+              <tr className="border-b border-[rgba(255,255,255,0.05)] text-[11px] font-[600] text-[var(--text-muted)] uppercase tracking-wider">
                 <th className="px-6 py-4">Customer</th>
                 <th className="px-6 py-4">Location Context</th>
                 <th className="px-6 py-4">Contact</th>
@@ -106,10 +114,10 @@ const AdminCustomers = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[rgba(255,255,255,0.1)]">
-              {filteredClients.map((client) => (
+              {(filteredClients || []).map((client) => (
                 <tr
-                  key={client.id}
-                  onClick={() => navigate(`/superadmin/customers/${client.id}`)}
+                  key={client?.id}
+                  onClick={() => navigate(`/superadmin/customers/${client?.id}`)}
                   className="group hover:bg-[rgba(255,255,255,0.2)] transition-colors cursor-pointer"
                 >
                   <td className="px-6 py-4">
@@ -118,9 +126,9 @@ const AdminCustomers = () => {
                         <User size={18} className="opacity-70" />
                       </div>
                       <div>
-                        <p className="text-[14px] font-[600] text-[#1F2937] group-hover:text-[#3A7AFE] transition-colors">
-                          {client.display_name ||
-                            client.full_name ||
+                        <p className="text-[14px] font-[600] customer-name group-hover:text-[#3A7AFE] dark:group-hover:text-blue-400 transition-colors">
+                          {client?.display_name ||
+                            client?.full_name ||
                             "Unnamed Customer"}
                         </p>
                       </div>
@@ -128,29 +136,29 @@ const AdminCustomers = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-[13px]">
-                      <MapPin size={14} className="text-[#1F2937] opacity-50" />
+                      <MapPin size={14} className="customer-location opacity-50" />
                       <div>
-                        <span className="text-[#1F2937] font-[500]">
-                          {zoneMap[client.zone_id || client.regionFilter]?.zoneName || "No Zone Assigned"}
+                        <span className="customer-location font-[500]">
+                          {zoneMap[client?.zone_id || client?.regionFilter]?.zoneName || "No Zone Assigned"}
                         </span>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-[13px] text-[#1F2937]">
+                    <div className="text-[13px] customer-email">
                       <p className="font-[500] opacity-90">
-                        {client.email || "—"}
+                        {client?.email || "—"}
                       </p>
-                      <p className="opacity-60">{client.phone || "N/A"}</p>
+                      <p className="customer-secondary">{client?.phone || "N/A"}</p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-[13px] font-[600] text-[#1F2937] bg-[rgba(255,255,255,0.4)] border border-[rgba(255,255,255,0.5)] px-2.5 py-1 rounded-[8px] shadow-sm">
-                      {client.devices?.length || 0}
+                    <span className="text-[13px] font-[600] customer-badge bg-[rgba(255,255,255,0.4)] dark:bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.5)] dark:border-[rgba(255,255,255,0.2)] px-2.5 py-1 rounded-[8px] shadow-sm">
+                      {client?.devices?.length || 0}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="text-[12px] font-[600] text-[#3A7AFE] border border-[rgba(58,122,254,0.3)] bg-[rgba(58,122,254,0.1)] px-3 py-1.5 rounded-[8px] hover:bg-[rgba(58,122,254,0.15)] hover:shadow-md transition-all shadow-sm">
+                    <button className="text-[12px] font-[600] customer-btn border border-current/20 bg-[rgba(58,122,254,0.1)] px-3 py-1.5 rounded-[8px] hover:bg-[rgba(58,122,254,0.15)] hover:shadow-md transition-all shadow-sm">
                       Manage Profile
                     </button>
                   </td>

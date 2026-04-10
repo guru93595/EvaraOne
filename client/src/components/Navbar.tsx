@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutGrid, Server, Shield, MapPin, LogOut } from 'lucide-react';
+import { LayoutGrid, Server, Shield, MapPin, LogOut, Sun, Moon } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../context/AuthContext';
 import { useTenancy } from '../context/TenancyContext';
@@ -9,6 +10,24 @@ const Navbar = () => {
     const navigate = useNavigate();
     const { user, logout, isAuthenticated } = useAuth();
     useTenancy(); // Keep hook active for context side-effects if any
+
+    const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+
+    useEffect(() => {
+        const root = window.document.documentElement;
+        if (theme === 'dark') {
+            root.setAttribute('data-theme', 'dark');
+            root.classList.add('dark');
+        } else {
+            root.removeAttribute('data-theme');
+            root.classList.remove('dark');
+        }
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+    };
 
     const navItems = [
         { name: 'MAP', path: '/map', icon: MapPin },
@@ -26,21 +45,21 @@ const Navbar = () => {
     };
 
     // Primary palette defined in the new specs
-    const primaryActive = '#3A7AFE';
-    const textPrimary = '#1A1F36';
-    const textSecondary = 'rgba(26,31,54,0.65)';
 
-    const primaryDarkActive = '#1D4ED8';
+    const textPrimary = 'var(--text-primary)';
+    const textSecondary = 'var(--text-secondary)';
+
+
 
     return (
         <div className="fixed top-3 lg:top-[16px] left-1/2 -translate-x-1/2 z-[2000] w-[98%] md:w-[96%] lg:w-[94%] max-w-[1400px] group transition-all duration-[220ms] ease-out hover:-translate-y-[2px]">
             <nav
                 className="flex items-center justify-between w-full h-[60px] md:h-[68px] rounded-full px-4 md:px-6 overflow-hidden box-border transition-all duration-[220ms]"
                 style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    backdropFilter: 'blur(40px) saturate(200%)',
-                    WebkitBackdropFilter: 'blur(40px) saturate(200%)',
-                    border: '1px solid rgba(255, 255, 255, 0.6)',
+                    background: 'var(--nav-bg)',
+                    backdropFilter: 'var(--card-blur)',
+                    WebkitBackdropFilter: 'var(--card-blur)',
+                    border: '1px solid var(--card-border)',
                     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.4)',
                 }}
             >
@@ -73,9 +92,9 @@ const Navbar = () => {
                                     background: isActive ? 'linear-gradient(135deg, rgba(37,99,235,0.25), rgba(29,78,216,0.4))' : 'transparent',
                                     backdropFilter: isActive ? 'blur(12px) saturate(180%)' : 'none',
                                     WebkitBackdropFilter: isActive ? 'blur(12px) saturate(180%)' : 'none',
-                                    color: isActive ? primaryDarkActive : textSecondary,
-                                    border: isActive ? '1px solid rgba(255,255,255,0.3)' : '1px solid transparent',
-                                    boxShadow: isActive ? 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(29,78,216,0.3), 0 8px 16px rgba(29,78,216,0.3)' : 'none',
+                                    color: isActive ? (theme === 'dark' ? '#FFFFFF' : '#3A7AFE') : textSecondary,
+                                    border: isActive ? (theme === 'dark' ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(0,0,0,0.1)') : '1px solid transparent',
+                                    boxShadow: isActive ? (theme === 'dark' ? '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.1)' : 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(29,78,216,0.3), 0 8px 16px rgba(29,78,216,0.3)') : 'none',
                                     transition: 'all 180ms cubic-bezier(0.4, 0, 0.2, 1)',
                                 }}
                                 onMouseEnter={(e) => {
@@ -96,7 +115,7 @@ const Navbar = () => {
                                 <item.icon
                                     size={23}
                                     strokeWidth={2}
-                                    color={isActive ? primaryDarkActive : 'currentColor'}
+                                    color={isActive ? (theme === 'dark' ? '#FFFFFF' : '#3A7AFE') : 'currentColor'}
                                     className="opacity-90"
                                 />
                                 <span className="hidden md:block">{item.name}</span>
@@ -106,6 +125,16 @@ const Navbar = () => {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Theme Toggle Button */}
+                    <button
+                        onClick={toggleTheme}
+                        className="w-[36px] h-[36px] md:w-[42px] md:h-[42px] flex items-center justify-center rounded-full transition-all duration-200 hover:bg-white/20"
+                        style={{ color: textPrimary }}
+                        title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+                    >
+                        {theme === 'light' ? <Moon size={22} strokeWidth={2} /> : <Sun size={22} strokeWidth={2} />}
+                    </button>
+
                     {isAuthenticated && user ? (
                         <div className="flex items-center gap-2">
                             {/* Role badge removed, replaced with soft profile badge */}
@@ -116,9 +145,9 @@ const Navbar = () => {
                                 <div
                                     className="w-[36px] h-[36px] md:w-[42px] md:h-[42px] rounded-full flex items-center justify-center font-bold text-[14px] md:text-[15px] shadow-sm"
                                     style={{
-                                        background: 'rgba(255,255,255,0.4)',
-                                        color: primaryActive,
-                                        border: '1px solid rgba(255,255,255,0.6)'
+                                        background: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)',
+                                        color: theme === 'dark' ? '#FFFFFF' : '#3A7AFE',
+                                        border: theme === 'dark' ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.6)'
                                     }}
                                 >
                                     {user.displayName[0].toUpperCase()}

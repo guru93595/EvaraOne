@@ -44,32 +44,32 @@ export default function UserManagementPage() {
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex items-center gap-4 mb-6">
-                <Users className="w-8 h-8 text-blue-600" />
+                <Users className="w-8 h-8 text-blue-500" />
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">User Management</h1>
-                    <p className="text-slate-500">Manage user access and roles.</p>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">User Management</h1>
+                    <p className="text-[var(--text-muted)]">Manage user access and roles.</p>
                 </div>
             </div>
 
-            <div className="apple-glass-card rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="apple-glass-card rounded-2xl shadow-sm border border-[var(--card-border)] overflow-hidden">
                 <table className="w-full text-left">
-                    <thead className="apple-glass-inner border-b border-slate-200">
+                    <thead className="apple-glass-inner border-b border-[var(--card-border)]">
                         <tr>
-                            <th className="p-4 text-xs font-bold text-slate-500 uppercase">User</th>
-                            <th className="p-4 text-xs font-bold text-slate-500 uppercase">Email</th>
-                            <th className="p-4 text-xs font-bold text-slate-500 uppercase">Current Role</th>
-                            <th className="p-4 text-xs font-bold text-slate-500 uppercase text-right">Actions</th>
+                            <th className="p-4 text-xs font-bold text-[var(--text-muted)] uppercase">User</th>
+                            <th className="p-4 text-xs font-bold text-[var(--text-muted)] uppercase">Email</th>
+                            <th className="p-4 text-xs font-bold text-[var(--text-muted)] uppercase">Current Role</th>
+                            <th className="p-4 text-xs font-bold text-[var(--text-muted)] uppercase text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-[var(--card-border)] opacity-90">
                         {users.map(user => (
-                            <tr key={user.id} className="hover:bg-white/30 transition-colors">
-                                <td className="p-4 font-medium text-slate-700">{user.full_name || 'N/A'}</td>
-                                <td className="p-4 text-slate-500">{user.email}</td>
+                            <tr key={user.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                <td className="p-4 font-medium text-[var(--text-primary)]">{user.full_name || 'N/A'}</td>
+                                <td className="p-4 text-[var(--text-muted)]">{user.email}</td>
                                 <td className="p-4">
                                     {editingId === user.id ? (
                                         <select
-                                            className="p-1 border rounded text-sm"
+                                            className="p-1 border border-[var(--card-border)] bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded text-sm outline-none"
                                             value={selectedRole}
                                             onChange={(e) => setSelectedRole(e.target.value as UserRole)}
                                         >
@@ -80,7 +80,7 @@ export default function UserManagementPage() {
                                             <option value="viewer">Viewer</option>
                                         </select>
                                     ) : (
-                                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide border border-slate-200">
+                                        <span className="bg-[var(--card-bg)] text-[var(--text-muted)] px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wide border border-[var(--card-border)]">
                                             {user.role}
                                         </span>
                                     )}
@@ -88,11 +88,11 @@ export default function UserManagementPage() {
                                 <td className="p-4 text-right">
                                     {editingId === user.id ? (
                                         <div className="flex justify-end gap-2">
-                                            <button onClick={saveRole} className="p-1 text-green-600 hover:bg-green-50 rounded"><Save className="w-4 h-4" /></button>
-                                            <button onClick={() => setEditingId(null)} className="p-1 text-red-600 hover:bg-red-50 rounded"><X className="w-4 h-4" /></button>
+                                            <button onClick={saveRole} className="p-1 text-green-500 hover:bg-green-500/10 rounded"><Save className="w-4 h-4" /></button>
+                                            <button onClick={() => setEditingId(null)} className="p-1 text-red-500 hover:bg-red-500/10 rounded"><X className="w-4 h-4" /></button>
                                         </div>
                                     ) : (
-                                        <button onClick={() => startEdit(user)} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
+                                        <button onClick={() => startEdit(user)} className="p-1 text-blue-500 hover:bg-blue-500/10 rounded">
                                             <Edit2 className="w-4 h-4" />
                                         </button>
                                     )}

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MapPicker â€” Interactive OpenStreetMap for picking device location.
  * Supports: manual lat/lng entry with fly-to, click-to-place, drag-to-reposition.
  */
@@ -94,7 +94,7 @@ export const MapPicker = ({ initialLat = 17.385, initialLng = 78.487, onConfirm,
         <div className="flex flex-col gap-3">
             {/* Manual coordinate entry */}
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center gap-2 text-[10px] font-[800] text-slate-500 uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[10px] font-[800] text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     <Search size={11} /> Enter Coordinates to Navigate
                 </div>
                 <div className="flex gap-2">
@@ -104,7 +104,7 @@ export const MapPicker = ({ initialLat = 17.385, initialLng = 78.487, onConfirm,
                         onChange={e => setManualLat(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder="Latitude (e.g. 17)"
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
                     />
                     <input
                         type="text"
@@ -112,7 +112,7 @@ export const MapPicker = ({ initialLat = 17.385, initialLng = 78.487, onConfirm,
                         onChange={e => setManualLng(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder="Longitude (e.g. 78)"
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
                     />
                     <button
                         type="button"
@@ -123,7 +123,7 @@ export const MapPicker = ({ initialLat = 17.385, initialLng = 78.487, onConfirm,
                     </button>
                 </div>
                 {coordError && <p className="text-[10px] text-red-500 font-[500]">{coordError}</p>}
-                <p className="text-[10px] text-slate-400">Click the map or drag the pin to fine-tune the position.</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">Click the map or drag the pin to fine-tune the position.</p>
             </div>
 
             {/* Map */}
@@ -152,19 +152,19 @@ export const MapPicker = ({ initialLat = 17.385, initialLng = 78.487, onConfirm,
             {/* Live coordinates */}
             <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-0.5 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                    <span className="text-[9px] font-[800] text-slate-400 uppercase tracking-wider">Latitude</span>
-                    <span className="text-[15px] font-[700] text-slate-800 font-mono">{position[0].toFixed(6)}</span>
+                    <span className="text-[9px] font-[800] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Latitude</span>
+                    <span className="text-[15px] font-[700] text-slate-800 dark:text-white font-mono">{position[0].toFixed(6)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                    <span className="text-[9px] font-[800] text-slate-400 uppercase tracking-wider">Longitude</span>
-                    <span className="text-[15px] font-[700] text-slate-800 font-mono">{position[1].toFixed(6)}</span>
+                    <span className="text-[9px] font-[800] text-slate-400 dark:text-slate-500 uppercase tracking-wider">Longitude</span>
+                    <span className="text-[15px] font-[700] text-slate-800 dark:text-white font-mono">{position[1].toFixed(6)}</span>
                 </div>
             </div>
 
             {/* Actions */}
             <div className="flex gap-2.5">
                 <button type="button" onClick={onCancel}
-                    className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-[13px] font-[600] hover:bg-slate-50 transition-all">
+                    className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-[13px] font-[600] hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                     Cancel
                 </button>
                 <button type="button" onClick={() => onConfirm(position[0], position[1])}

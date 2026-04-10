@@ -80,7 +80,7 @@ const NodeDetails = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full py-32 text-center apple-glass-inner">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-500 font-medium">Loading Heartbeat...</p>
+        <p className="text-[var(--text-muted)] font-medium">Loading Heartbeat...</p>
       </div>
     );
   }
@@ -99,7 +99,7 @@ const NodeDetails = () => {
         <div className="p-6 max-w-4xl mx-auto w-full">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 transition-colors"
+            className="flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-6 transition-colors"
           >
             <ArrowLeft size={20} />
             <span className="font-semibold">Back</span>
@@ -107,7 +107,7 @@ const NodeDetails = () => {
 
           <div
             className={clsx(
-              "bg-gradient-to-br rounded-3xl p-8 border border-slate-200 shadow-xl",
+              "bg-gradient-to-br rounded-3xl p-8 border border-[var(--card-border)] shadow-xl",
               styles.accentBg,
             )}
           >
@@ -121,7 +121,7 @@ const NodeDetails = () => {
                 <MapPin className="text-white" size={24} />
               </div>
               <div className="flex-1">
-                <h1 className="text-3xl font-extrabold text-slate-800 mb-2">
+                <h1 className="text-3xl font-extrabold text-[var(--text-primary)] mb-2">
                   {device.name}
                 </h1>
                 <div className="flex gap-2 flex-wrap">
@@ -148,19 +148,19 @@ const NodeDetails = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="apple-glass-card backdrop-blur rounded-xl p-4">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-1">
+              <div className="apple-glass-card backdrop-blur rounded-xl p-4 border border-[var(--card-border)]">
+                <p className="text-xs font-bold text-[var(--text-muted)] uppercase mb-1">
                   Location
                 </p>
-                <p className="text-sm font-mono text-slate-600">
+                <p className="text-sm font-mono text-[var(--text-primary)] opacity-80">
                   {device.latitude.toFixed(6)}, {device.longitude.toFixed(6)}
                 </p>
               </div>
-              <div className="apple-glass-card backdrop-blur rounded-xl p-4">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-1">
+              <div className="apple-glass-card backdrop-blur rounded-xl p-4 border border-[var(--card-border)]">
+                <p className="text-xs font-bold text-[var(--text-muted)] uppercase mb-1">
                   Blueprint ID
                 </p>
-                <p className="text-xs font-mono text-slate-600 break-all">
+                <p className="text-xs font-mono text-[var(--text-primary)] opacity-80 break-all">
                   {device.id}
                 </p>
               </div>
@@ -175,11 +175,11 @@ const NodeDetails = () => {
   if (!device && !node) {
     return (
       <div className="flex flex-col items-center justify-center h-full py-32 text-center apple-glass-inner">
-        <Cpu size={28} className="text-slate-300 mb-4" />
-        <h2 className="text-lg font-bold text-slate-600 mb-1">
+        <Cpu size={28} className="text-[var(--card-border)] mb-4" />
+        <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">
           Asset Not Found
         </h2>
-        <p className="text-sm text-slate-400 mb-6">Blueprint ID: {id}</p>
+        <p className="text-sm text-[var(--text-muted)] mb-6">Blueprint ID: {id}</p>
         <button
           onClick={() => navigate(-1)}
           className="px-5 py-2.5 bg-[#3A7AFE] text-white rounded-xl text-sm font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all"

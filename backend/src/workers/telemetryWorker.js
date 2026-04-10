@@ -87,7 +87,7 @@ async function processDevice(device) {
         if (!feeds.length) return;
 
         // CRITICAL FIX: Use centralized processing logic
-        const telemetryData = deviceState.processThingSpeakData(device, feeds);
+        const telemetryData = await deviceState.processThingSpeakData(device, feeds);
         if (!telemetryData) return;
 
         // CRITICAL FIX: Update Firestore with standardized payload
@@ -97,6 +97,7 @@ async function processDevice(device) {
         const payload = {
             deviceId: device.id,
             percentage: telemetryData.percentage,
+            level_percentage: telemetryData.percentage, // Include for consistency
             volume: telemetryData.volume,
             flow_rate: telemetryData.flow_rate,
             total_reading: telemetryData.total_reading,
@@ -111,7 +112,7 @@ async function processDevice(device) {
             telemetryEvents.emit("device:update", payload);
         }
         
-        console.log(`[TelemetryWorker] Updated ${device.id}: ${telemetryData.percentage.toFixed(1)}% (${telemetryData.status})`);
+        console.log(`[TelemetryWorker] Updated ${device.id}: ${telemetryData.percentage !== undefined ? telemetryData.percentage.toFixed(1) + '%' : 'N/A'} (${telemetryData.status})`);
     } catch (err) {
         console.error(`[TelemetryWorker] Error processing ${device.id}:`, err.message);
     }

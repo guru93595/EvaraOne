@@ -26,9 +26,24 @@ const NodeExplorerItem = ({ node }: { node: NodeData }) => {
     const { telemetry: snap } = useRealtimeTelemetry(node.firestore_id);
     const isTank = node.type === 'tank';
     
-    // Percentage calculation for tanks
-    let pct = snap?.level_percentage ?? (node.metrics?.Level || 0);
-    if (snap && !snap.level_percentage && isTank) {
+    // Percentage calculation for tanks - synchronized from backend
+    // Priority: 1) Backend telemetry_snapshot 2) Real-time telemetry 3) Node data 4) Calculate from fields
+    let pct = 0;
+    
+    // First, try to get from node's telemetry_snapshot (comes from backend sync)
+    if (node.telemetry_snapshot?.level_percentage !== undefined) {
+        pct = node.telemetry_snapshot.level_percentage;
+    }
+    // Then try real-time telemetry
+    else if (snap?.level_percentage !== undefined) {
+        pct = snap.level_percentage;
+    }
+    // Then try stored metrics
+    else if (node.metrics?.Level !== undefined) {
+        pct = node.metrics.Level;
+    }
+    // Finally, calculate from sensor fields if needed
+    else if (snap && isTank) {
         const distance = parseFloat(snap.field1 || snap.field2 || snap.water_level_raw_sensor_reading);
         const depth = 1.2; // Default fallback
         if (!isNaN(distance)) {

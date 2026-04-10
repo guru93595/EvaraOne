@@ -59,6 +59,15 @@ const EvaraDeepAnalytics = () => {
         error: analyticsError
     } = useDeviceAnalytics(hardwareId);
 
+    // ── Auto-fetch data when device is selected ────────────────────────────────
+    useEffect(() => {
+        if (hardwareId) {
+            // Immediately fetch fresh data from ThingSpeak when device is selected
+            refetch();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hardwareId]); // IMPORTANT: Only depend on hardwareId, NOT refetch
+
     const deviceConfig = ('config' in (unifiedData?.config ?? {})
         ? (unifiedData!.config as any).config
         : undefined) as DeepConfig | undefined;
@@ -177,8 +186,8 @@ const EvaraDeepAnalytics = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-transparent">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 rounded-full border-4 border-solid animate-spin" style={{ borderColor: 'rgba(94,106,210,0.2)', borderTopColor: '#5e6ad2' }} />
-                    <p className="text-sm font-medium" style={{ color: '#8E8E93' }}>Loading analytics...</p>
+                    <div className="w-8 h-8 rounded-full border-4 border-solid animate-spin" style={{ borderColor: 'var(--card-border)', borderTopColor: 'var(--text-primary)' }} />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Loading analytics...</p>
                 </div>
             </div>
         );
@@ -187,7 +196,7 @@ const EvaraDeepAnalytics = () => {
     return (
         <div
             className="min-h-screen font-sans relative overflow-x-hidden bg-transparent"
-            style={{ color: '#1C1C1E' }}
+            style={{ color: 'var(--text-primary)' }}
         >
             <main
                 className="relative flex-grow px-4 sm:px-6 lg:px-8 pt-[110px] lg:pt-[120px] pb-8"
@@ -198,22 +207,22 @@ const EvaraDeepAnalytics = () => {
                     {/* ── Breadcrumb row ─────────────────────────────────────────── */}
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <nav className="flex items-center gap-1 text-xs font-normal" style={{ color: '#888' }}>
+                            <nav className="flex items-center gap-1 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
                                 <button onClick={() => navigate('/')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0">
                                     Home
                                 </button>
-                                <span className="material-icons" style={{ fontSize: '16px', color: '#888' }}>chevron_right</span>
-                                <button onClick={() => navigate('/nodes')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0 font-normal" style={{ color: '#888' }}>
+                                <span className="material-icons" style={{ fontSize: '16px', color: 'var(--text-muted)' }}>chevron_right</span>
+                                <button onClick={() => navigate('/nodes')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0 font-normal" style={{ color: 'var(--text-muted)' }}>
                                     All Nodes
                                 </button>
-                                <span className="material-icons" style={{ fontSize: '16px', color: '#888' }}>chevron_right</span>
-                                <span className="font-bold" style={{ color: '#222', fontWeight: '700' }}>{deviceName}</span>
+                                <span className="material-icons" style={{ fontSize: '16px', color: 'var(--text-muted)' }}>chevron_right</span>
+                                <span className="font-bold" style={{ color: 'var(--text-primary)', fontWeight: '700' }}>{deviceName}</span>
                             </nav>
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => refetch()}
                                     disabled={analyticsFetching}
-                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-200 shadow-md apple-glass-card active:scale-95 ${analyticsFetching ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#0077ff]/10 hover:bg-[#0077ff]/20 text-[#0077ff] border border-[#0077ff]/30'}`}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all duration-200 shadow-md apple-glass-card active:scale-95 ${analyticsFetching ? 'bg-black/5 dark:bg-white/5 text-gray-400 cursor-not-allowed' : 'bg-[#0077ff]/10 hover:bg-[#0077ff]/20 text-[#0077ff] border border-[#0077ff]/30'}`}
                                 >
                                     <span className={`material-icons ${analyticsFetching ? 'animate-spin' : ''}`} style={{ fontSize: '14px' }}>
                                         {analyticsFetching ? 'sync' : 'refresh'}
@@ -238,7 +247,7 @@ const EvaraDeepAnalytics = () => {
                                 </div>
                             </div>
                         </div>
-                        <h1 className="text-3xl font-black m-0" style={{ color: '#1C1C1E', letterSpacing: '-0.5px' }}>
+                        <h1 className="text-3xl font-black m-0" style={{ color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
                             {deviceName} Deep Analytics
                         </h1>
                     </div>
@@ -291,8 +300,8 @@ const EvaraDeepAnalytics = () => {
 
                             {/* Geological cross-section visualization */}
                             <div
-                                className="relative w-full max-w-[220px] h-[420px] rounded-2xl overflow-hidden border border-white/30"
-                                style={{ boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.12)' }}
+                                className="relative w-full max-w-[220px] h-[420px] rounded-2xl overflow-hidden"
+                                style={{ boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.12)', border: '1px solid var(--card-border)' }}
                             >
                                 {/* Geological layers */}
                                 <div className="absolute inset-0 flex flex-col">
@@ -354,12 +363,11 @@ const EvaraDeepAnalytics = () => {
                                 <div
                                     className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-14 flex flex-col justify-end"
                                     style={{
-                                        background:
-                                            'linear-gradient(90deg,#cbd5e1 0%,#f8fafc 15%,#f1f5f9 50%,#f8fafc 85%,#cbd5e1 100%)',
+                                        background: "var(--bg-primary)",
                                         boxShadow:
                                             'inset 5px 0 10px -5px rgba(0,0,0,0.3), inset -5px 0 10px -5px rgba(0,0,0,0.3)',
-                                        borderLeft: '1px solid rgba(0,0,0,0.08)',
-                                        borderRight: '1px solid rgba(0,0,0,0.08)',
+                                        borderLeft: '1px solid var(--card-border)',
+                                        borderRight: '1px solid var(--card-border)',
                                     }}
                                 >
                                     {/* Water column at bottom */}
@@ -429,7 +437,7 @@ const EvaraDeepAnalytics = () => {
                                 <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-30">
                                     <div
                                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full shadow-xl border border-blue-400/30 backdrop-blur-md"
-                                        style={{ background: 'rgba(255,255,255,0.95)' }}
+                                        style={{ background: 'var(--bg-secondary)', border: '1px solid var(--card-border)' }}
                                     >
                                         <span className="size-1.5 rounded-full bg-blue-500 animate-ping block" />
                                         <span className="text-blue-600 font-bold text-[10px] whitespace-nowrap uppercase tracking-tight">
@@ -471,34 +479,34 @@ const EvaraDeepAnalytics = () => {
                             <div className="flex flex-col gap-3">
 
                                 {/* Current Water Column */}
-                                <div className="p-4 rounded-2xl" style={{ background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                                <div className="p-4 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
                                     <p className="text-xs font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#3b82f6' }}>Current Water Column</p>
-                                    <p className="text-4xl font-black m-0 leading-tight">
-                                        {waterColumn.toFixed(1)} <span className="text-base font-normal text-slate-500">m</span>
+                                    <p className="text-4xl font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>
+                                        {waterColumn.toFixed(1)} <span className="text-base font-normal text-[var(--text-muted)]">m</span>
                                     </p>
                                 </div>
 
                                 {/* Storage */}
-                                <div className="p-4 rounded-2xl" style={{ background: 'rgba(0,119,255,0.07)', border: '1px solid rgba(0,119,255,0.12)' }}>
+                                <div className="p-4 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
                                     <p className="text-xs font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#0077ff' }}>Storage</p>
-                                    <p className="text-4xl font-black m-0 leading-tight">
-                                        {storagePercent}% <span className="text-base font-normal text-slate-500">Full</span>
+                                    <p className="text-4xl font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>
+                                        {storagePercent}% <span className="text-base font-normal text-[var(--text-muted)]">Full</span>
                                     </p>
                                 </div>
 
                                 {/* Measured Depth */}
-                                <div className="p-4 rounded-2xl" style={{ background: 'rgba(100,116,139,0.05)', border: '1px solid rgba(100,116,139,0.1)' }}>
-                                    <p className="text-xs font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#64748b' }}>Measured Depth</p>
-                                    <p className="text-3xl font-black m-0 leading-tight">
-                                        {measuredDepth.toFixed(0)} <span className="text-base font-normal text-slate-500">m</span>
+                                <div className="p-4 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
+                                    <p className="text-xs font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: 'var(--text-muted)' }}>Measured Depth</p>
+                                    <p className="text-3xl font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>
+                                        {measuredDepth.toFixed(0)} <span className="text-base font-normal text-[var(--text-muted)]">m</span>
                                     </p>
                                 </div>
 
                                 {/* Total Bore Depth */}
-                                <div className="p-4 rounded-2xl" style={{ background: 'rgba(100,116,139,0.05)', border: '1px solid rgba(100,116,139,0.1)' }}>
-                                    <p className="text-xs font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: '#64748b' }}>Total Bore Depth</p>
-                                    <p className="text-3xl font-black m-0 leading-tight">
-                                        {totalBoreDepth.toFixed(0)} <span className="text-base font-normal text-slate-500">m</span>
+                                <div className="p-4 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
+                                    <p className="text-xs font-semibold uppercase tracking-wider m-0 mb-1" style={{ color: 'var(--text-muted)' }}>Total Bore Depth</p>
+                                    <p className="text-3xl font-black m-0 leading-tight" style={{ color: 'var(--text-primary)' }}>
+                                        {totalBoreDepth.toFixed(0)} <span className="text-base font-normal text-[var(--text-muted)]">m</span>
                                     </p>
                                 </div>
 
@@ -522,7 +530,7 @@ const EvaraDeepAnalytics = () => {
 
                             {/* Header + Zone */}
                             <div className="text-center">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Node Configuration</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Node Configuration</p>
                                 <p className="text-xs font-mono text-slate-400 mt-1">{displayId}</p>
                                 {zoneName && (
                                     <div className="flex items-center justify-center gap-1.5 mt-2">
@@ -536,12 +544,12 @@ const EvaraDeepAnalytics = () => {
                                 <span className="text-slate-400">/</span>
                                 <span className="text-slate-700">{deviceInfo?.name || (deviceInfo as any)?.label || 'Deep Node'}</span>
                             </nav>
-                            <h1 className="text-3xl font-bold tracking-tight m-0 text-center" style={{ color: '#1C1C1E' }}>
+                            <h1 className="text-3xl font-bold tracking-tight m-0 text-center" style={{ color: 'var(--text-primary)' }}>
                                 {deviceInfo?.name || (deviceInfo as any)?.label || 'Deep Node'} Analytics
                             </h1>
 
                             {/* Cloud mapping */}
-                            <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.4)' }}>
+                            <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                     Cloud Mapping
                                 </p>
@@ -571,7 +579,7 @@ const EvaraDeepAnalytics = () => {
                             </div>
 
                             {/* Physical parameters */}
-                            <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.4)' }}>
+                            <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)' }}>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                     Physical Parameters
                                 </p>
@@ -611,14 +619,14 @@ const EvaraDeepAnalytics = () => {
                             )}
                         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
                             <div>
-                                <h3 className="font-bold text-lg text-slate-900">Historical Analytics</h3>
-                                <p className="text-slate-400 text-xs">
+                                <h3 className="font-bold text-lg text-[var(--text-primary)]">Historical Analytics</h3>
+                                <p className="text-[var(--text-muted)] text-xs">
                                     Comprehensive depth performance tracking
                                 </p>
                             </div>
                             <div
                                 className="flex p-1 rounded-full gap-1"
-                                style={{ background: 'rgba(0,0,0,0.05)' }}
+                                style={{ background: 'var(--bg-primary)', border: '1px solid var(--card-border)' }}
                             >
                                 {(['1H', '24H', '7D', '30D'] as const).map((r) => (
                                     <button
@@ -626,7 +634,7 @@ const EvaraDeepAnalytics = () => {
                                         onClick={() => setTimeRange(r)}
                                         className={`px-5 py-2 rounded-full text-[10px] font-bold uppercase transition-all ${timeRange === r
                                             ? 'bg-[#3A7AFE] text-white shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-900'
+                                            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                                             }`}
                                     >
                                         {r}
@@ -636,12 +644,12 @@ const EvaraDeepAnalytics = () => {
                         </div>
 
                         {historyLoading ? (
-                            <div className="h-64 flex items-center justify-center text-slate-400 text-sm gap-2">
+                            <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm gap-2">
                                 <span className="material-symbols-rounded animate-spin" style={{ fontSize: 20 }}>progress_activity</span>
                                 Loading history…
                             </div>
                         ) : depthHistory.length === 0 ? (
-                            <div className="h-64 flex flex-col items-center justify-center gap-2 text-slate-400">
+                            <div className="h-64 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
                                 <span className="material-symbols-rounded" style={{ fontSize: 32 }}>signal_disconnected</span>
                                 <p className="text-sm font-medium">No data for this time range</p>
                             </div>
@@ -651,8 +659,8 @@ const EvaraDeepAnalytics = () => {
                                 {/* Single Water Column chart — full width */}
                                 <div className="flex justify-between items-center px-1">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-700">Water Column Depth</p>
-                                        <p className="text-[10px] text-slate-400 uppercase tracking-wider">Height of water in bore over time</p>
+                                        <p className="text-sm font-bold text-[var(--text-primary)]">Water Column Depth</p>
+                                        <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Height of water in bore over time</p>
                                     </div>
                                     <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: 'rgba(58,122,254,0.1)', color: '#3A7AFE' }}>Avg: {avgWaterCol}</span>
                                 </div>
@@ -664,13 +672,20 @@ const EvaraDeepAnalytics = () => {
                                                 <stop offset="95%" stopColor="#3A7AFE" stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} unit="m" width={45} />
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" vertical={false} opacity={0.3} />
+                                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)', fontWeight: 600 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                                        <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} unit="m" width={45} />
                                         <RechartsTooltip
-                                            contentStyle={{ background: 'rgba(15,15,35,0.88)', border: 'none', borderRadius: 14, backdropFilter: 'blur(14px)', padding: '10px 16px' }}
-                                            labelStyle={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                                            itemStyle={{ color: '#fff', fontSize: 13, fontWeight: 700 }}
+                                            contentStyle={{ 
+                                                background: 'var(--bg-secondary)', 
+                                                border: '1px solid var(--card-border)', 
+                                                borderRadius: 14, 
+                                                backdropFilter: 'blur(14px)', 
+                                                padding: '10px 16px',
+                                                boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+                                            }}
+                                            labelStyle={{ color: 'var(--text-muted)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                                            itemStyle={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}
                                             formatter={(v: any) => [`${parseFloat(v || 0).toFixed(1)} m`, 'Water Column']}
                                         />
                                         <Area type="monotone" dataKey="waterCol" stroke="#3A7AFE" strokeWidth={2.5} fill="url(#deepWaterGrad)" dot={false} activeDot={{ r: 5, fill: '#3A7AFE', strokeWidth: 0 }} />
@@ -687,28 +702,29 @@ const EvaraDeepAnalytics = () => {
 
             {/* Footer */}
             <footer className="text-center pb-8">
-                <p className="text-slate-400 text-xs font-medium">
+                <p className="text-[var(--text-muted)] text-xs font-medium">
                     © {new Date().getFullYear()} EvaraDeep Systems · Precision Borewell Analytics
                 </p>
             </footer>
 
             {/* Delete Confirmation Popup */}
             {showDeleteConfirm && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pt-20" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pt-20" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }}
                     onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
                     <div className="rounded-3xl p-8 flex flex-col w-full max-sm:max-w-xs max-w-sm text-center"
                         style={{
-                            background: 'white',
+                            background: 'var(--bg-secondary)',
+                            border: '1px solid var(--card-border)',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
                         }}
                         onClick={e => e.stopPropagation()}>
 
-                        <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                             <span className="material-icons" style={{ fontSize: '32px' }}>delete_outline</span>
                         </div>
 
-                        <h3 className="text-xl font-bold mb-2 text-gray-900">Delete this Node?</h3>
-                        <p className="text-sm text-gray-500 mb-8">
+                        <h3 className="text-xl font-bold mb-2 text-[var(--text-primary)]">Delete this Node?</h3>
+                        <p className="text-sm text-[var(--text-muted)] mb-8">
                             This will permanently remove <strong>{deviceName}</strong> and all its historical telemetry data. This action cannot be undone.
                         </p>
 
@@ -723,7 +739,7 @@ const EvaraDeepAnalytics = () => {
                             <button
                                 onClick={() => setShowDeleteConfirm(false)}
                                 disabled={isDeleting}
-                                className="w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
+                                className="w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider text-gray-500 hover:bg-black/5 dark:hover:bg-white/5 transition-all active:scale-95"
                             >
                                 Cancel
                             </button>

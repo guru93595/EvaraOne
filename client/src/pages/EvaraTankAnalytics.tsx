@@ -14,11 +14,8 @@ import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
-
-    TrendingUp, TrendingDown, Timer, Droplets, Clock, Activity,
-
+    TrendingUp, TrendingDown, Timer, Droplets,
     Wifi, Info, Bell, Settings
-
 } from 'lucide-react';
 
 import api from '../services/api';
@@ -185,7 +182,10 @@ const EvaraTankAnalytics = () => {
 
     const { user } = useAuth();
 
-
+    // ── Chart Filter State ──────────────────────────────────────────────────
+    const [tankChartRange, setTankChartRange] = useState<'24H' | '1W' | '1M' | 'RANGE'>('24H');
+    const [rangeStart, setRangeStart] = useState<string>('');
+    const [rangeEnd, setRangeEnd] = useState<string>('');
 
     const queryClient = useQueryClient();
 
@@ -235,17 +235,31 @@ const EvaraTankAnalytics = () => {
 
     // ── Unified Analytics Data ────────────────────────────────────────────────
 
+    // ── Unified Analytics Data ────────────────────────────────────────────────
+
     const {
-
         data: unifiedData,
-
         isLoading: analyticsLoading,
         isFetching: analyticsFetching,
         refetch,
-    } = useDeviceAnalytics(hardwareId);
+    } = useDeviceAnalytics(hardwareId, {
+        filter: {
+            range: tankChartRange === 'RANGE' ? undefined : tankChartRange,
+            startDate: tankChartRange === 'RANGE' ? rangeStart : undefined,
+            endDate: tankChartRange === 'RANGE' ? rangeEnd : undefined
+        }
+    });
 
     useAnalyticsLogger();
 
+    // ── Auto-fetch data when device is selected ────────────────────────────────
+    useEffect(() => {
+        if (hardwareId) {
+            // Immediately fetch fresh data from ThingSpeak when device is selected
+            refetch();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hardwareId]); // IMPORTANT: Only depend on hardwareId, NOT refetch
 
 
     const deviceConfig = ('config' in (unifiedData?.config ?? {})
@@ -265,13 +279,15 @@ const EvaraTankAnalytics = () => {
     const customerConfig = (deviceInfo as any)?.customer_config || {};
     const isSuperAdmin = user?.role === 'superadmin';
 
-    const showTankLevelParam    = isSuperAdmin || customerConfig.showTankLevel    !== false;
-    const showEstimationsParam  = isSuperAdmin || customerConfig.showEstimations  !== false;
-    const showFillRateParam     = isSuperAdmin || customerConfig.showFillRate     !== false;
-    const showConsumptionParam  = isSuperAdmin || customerConfig.showConsumption  !== false;
-    const showAlertsParam       = isSuperAdmin || customerConfig.showAlerts       !== false;
+    const showTankLevelParam = isSuperAdmin || customerConfig.showTankLevel !== false;
+    const showEstimationsParam = isSuperAdmin || customerConfig.showEstimations !== false;
+    const showFillRateParam = isSuperAdmin || customerConfig.showFillRate !== false;
+    const showConsumptionParam = isSuperAdmin || customerConfig.showConsumption !== false;
+    const showAlertsParam = isSuperAdmin || customerConfig.showAlerts !== false;
     const showDeviceHealthParam = isSuperAdmin || customerConfig.showDeviceHealth !== false;
-    const showVolumeParam       = isSuperAdmin || customerConfig.showVolume       !== false;
+    const showVolumeParam = isSuperAdmin || customerConfig.showVolume !== false;
+
+
 
     const { telemetry: realtimeData } = useRealtimeTelemetry(deviceInfo?.id || hardwareId || "");
 
@@ -280,6 +296,10 @@ const EvaraTankAnalytics = () => {
     const [showTankLevel, setShowTankLevel] = useState(true);
 
     const [showVolume, setShowVolume] = useState(true);
+
+    // ── Unified Analytics Data ────────────────────────────────────────────────
+
+    // (Moved useDeviceAnalytics hook call above hooks)
 
 
 
@@ -330,9 +350,9 @@ const EvaraTankAnalytics = () => {
 
 
 
-                // Keep last 500 points for better historical analysis
+                // Keep extended buffer to ensure 1W and 1M views have enough data points
                 const updated = [...prev, newPoint];
-                return updated.slice(-500);
+                return updated.slice(-10000); // Increased to 10k to cover a full week of high-frequency data
             });
         }
     }, [realtimeData]);
@@ -447,15 +467,118 @@ const EvaraTankAnalytics = () => {
     }, [unifiedData?.history?.feeds, liveFeeds, telemetryData, deviceInfo?.asset_type, deviceConfig]);
 
     const chartData = useMemo(() => {
-        // CRITICAL FIX: Use only processed real-time data for consistency
-        if (activeTelemetry && liveFeeds.length > 0) {
-            // Create chart data from processed real-time feeds only
-            return dataMergingService.getChartData(liveFeeds as any, 1000, metrics.capacityLitres);
-        }
+        // DATA INTEGRITY: Base the chart on the merged result which combines 
+        // 10,000+ points of history with new live feeds.
+        return dataMergingService.getChartData(mergedDataResult.mergedData, 10000, metrics.capacityLitres);
+    }, [mergedDataResult.mergedData, metrics.capacityLitres]);
 
-        // Fallback to merged data if no real-time data
-        return dataMergingService.getChartData(mergedDataResult.mergedData, 1000, metrics.capacityLitres);
-    }, [mergedDataResult.mergedData, liveFeeds, activeTelemetry, metrics.capacityLitres]);
+    const filteredChartData = useMemo(() => {
+        if (!chartData || chartData.length === 0) return [];
+
+        if (tankChartRange === '24H') {
+            return chartData.slice(-7);
+        } else if (tankChartRange === '1W') {
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const today = new Date();
+            const result = [];
+
+            for (let i = 6; i >= 0; i--) {
+                const targetDate = new Date(today);
+                targetDate.setDate(targetDate.getDate() - i);
+
+                const dayData = chartData.filter(d => {
+                    const ts = new Date((d as any).timestamp);
+                    return ts.getDate() === targetDate.getDate() && ts.getMonth() === targetDate.getMonth();
+                });
+
+                let avgLevel: number | null = null;
+                let avgVolume: number | null = null;
+                if (dayData.length > 0) {
+                    avgLevel = dayData.reduce((sum, item) => sum + (item.level || 0), 0) / dayData.length;
+                    avgVolume = dayData.reduce((sum, item) => sum + (item.volume || 0), 0) / dayData.length;
+                }
+
+                result.push({
+                    time: days[targetDate.getDay()],
+                    timestamp: targetDate.toISOString(),
+                    level: avgLevel ?? 0,
+                    volume: avgVolume ?? 0
+                });
+            }
+            return result;
+        } else if (tankChartRange === '1M') {
+            const result = [];
+            const today = new Date();
+
+            for (let i = 3; i >= 0; i--) {
+                const targetDate = new Date(today);
+                targetDate.setDate(targetDate.getDate() - (i * 7));
+
+                const weekData = chartData.filter(d => {
+                    const ts = new Date((d as any).timestamp);
+                    const diffTime = targetDate.getTime() - ts.getTime();
+                    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                    return diffDays >= 0 && diffDays < 7;
+                });
+
+                let avgLevel: number | null = null;
+                let avgVolume: number | null = null;
+                if (weekData.length > 0) {
+                    avgLevel = weekData.reduce((sum, item) => sum + (item.level || 0), 0) / weekData.length;
+                    avgVolume = weekData.reduce((sum, item) => sum + (item.volume || 0), 0) / weekData.length;
+                }
+
+                result.push({
+                    time: `Week ${4 - i}`,
+                    timestamp: targetDate.toISOString(),
+                    level: avgLevel ?? 0,
+                    volume: avgVolume ?? 0
+                });
+            }
+            return result;
+        } else if (tankChartRange === 'RANGE') {
+            if (!rangeStart || !rangeEnd) {
+                return chartData.slice(-7);
+            }
+            const start = new Date(rangeStart);
+            const end = new Date(rangeEnd);
+            end.setHours(23, 59, 59, 999);
+
+            const rangeFeeds = chartData.filter(d => {
+                const ts = new Date((d as any).timestamp);
+                return ts >= start && ts <= end;
+            });
+
+            // PREPROCESSING: If range is more than 24 hours and we have many points, group by hour for a cleaner trend
+            const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+            if (diffHours > 24 && rangeFeeds.length > 500) {
+                const hourlyMap = new Map<string, { level: number; volume: number; count: number }>();
+                rangeFeeds.forEach(d => {
+                    const ts = new Date((d as any).timestamp);
+                    const key = `${ts.getFullYear()}-${ts.getMonth() + 1}-${ts.getDate()} ${ts.getHours()}:00`;
+                    const existing = hourlyMap.get(key) || { level: 0, volume: 0, count: 0 };
+                    hourlyMap.set(key, {
+                        level: existing.level + (d.level || 0),
+                        volume: existing.volume + (d.volume || 0),
+                        count: existing.count + 1
+                    });
+                });
+
+                return Array.from(hourlyMap.entries()).map(([key, data]) => {
+                    const ts = new Date(key);
+                    return {
+                        time: ts.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit' }),
+                        timestamp: ts.toISOString(),
+                        level: data.level / data.count,
+                        volume: data.volume / data.count
+                    };
+                });
+            }
+
+            return rangeFeeds;
+        }
+        return chartData;
+    }, [chartData, tankChartRange, rangeStart, rangeEnd]);
 
     const waterAnalytics = useWaterAnalytics(
         localCfg.heightM,
@@ -471,7 +594,8 @@ const EvaraTankAnalytics = () => {
         (activeTelemetry as any)?.is_corrected || false,
         (activeTelemetry as any)?.original_value,
         (activeTelemetry as any)?.confidence,
-        !isOffline  // isDeviceOnline — used for Device Health
+        !isOffline,  // isDeviceOnline — used for Device Health
+        unifiedData?.tankBehavior  // ← CHANGE 1: Add tankBehavior from API
     );
 
 
@@ -494,7 +618,7 @@ const EvaraTankAnalytics = () => {
     }, [waterAnalytics.fillRateLpm, waterAnalytics.refillsToday, hardwareId, metrics.capacityLitres, logData]);
 
     const chartDataForDisplay = useMemo(() => {
-        return chartData.map(point => ({
+        return filteredChartData.map(point => ({
             time: point.time,
             timestamp: (point as any).timestamp,   // full ISO string — used by the tooltip to display date
             level: point.level,
@@ -508,7 +632,7 @@ const EvaraTankAnalytics = () => {
             predictions: (point as any).predictions || null,
             slope: (point as any).slope || 0
         }));
-    }, [chartData]);
+    }, [filteredChartData]);
 
     const latestPoint = chartDataForDisplay.length > 0 ? chartDataForDisplay[chartDataForDisplay.length - 1] : null;
 
@@ -522,10 +646,8 @@ const EvaraTankAnalytics = () => {
         return `${m}m`;
     };
 
-
-
     // Use the LAST chart data point for tank card display — ensures exact parity with graph
-    const pct = latestPoint ? latestPoint.level : metrics.percentage;
+    const pct = (latestPoint ? (latestPoint.level ?? metrics.percentage) : (metrics.percentage ?? 0)) ?? 0;
     const deviceName = deviceInfo?.name || (deviceInfo as { label?: string })?.label || 'Tank';
     const zoneName = deviceInfo?.zone_name;
 
@@ -617,7 +739,7 @@ const EvaraTankAnalytics = () => {
 
                     <div className="w-8 h-8 rounded-full border-4 border-solid animate-spin" style={{ borderColor: 'rgba(10,132,255,0.2)', borderTopColor: '#0A84FF' }} />
 
-                    <p className="text-sm font-medium" style={{ color: '#8E8E93' }}>Loading analytics...</p>
+                    <p className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>Loading analytics...</p>
 
                 </div>
 
@@ -629,10 +751,12 @@ const EvaraTankAnalytics = () => {
 
 
 
+
+
     // Main component return
     return (
         <div className="min-h-screen font-sans relative overflow-x-hidden bg-transparent" style={{
-            color: '#1C1C1E'
+            color: 'var(--text-primary)'
         }}>
 
             <main className="relative flex-grow px-4 sm:px-6 lg:px-8 pt-[110px] lg:pt-[120px] pb-8" style={{ zIndex: 1 }}>
@@ -647,7 +771,7 @@ const EvaraTankAnalytics = () => {
 
                         <div className="flex flex-col gap-2">
 
-                            <nav className="flex items-center gap-1 text-xs font-normal" style={{ color: '#888' }}>
+                            <nav className="flex items-center gap-1 text-xs font-normal" style={{ color: "var(--text-muted)" }}>
 
                                 <button onClick={() => navigate('/')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0">
 
@@ -655,21 +779,21 @@ const EvaraTankAnalytics = () => {
 
                                 </button>
 
-                                <span className="material-icons" style={{ fontSize: '16px', color: '#888' }}>chevron_right</span>
+                                <span className="material-icons" style={{ fontSize: '16px', color: "var(--text-muted)" }}>chevron_right</span>
 
-                                <button onClick={() => navigate('/nodes')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0 font-normal" style={{ color: '#888' }}>
+                                <button onClick={() => navigate('/nodes')} className="hover:text-[#FF9500] transition-colors bg-transparent border-none cursor-pointer p-0 font-normal" style={{ color: "var(--text-muted)" }}>
 
                                     All Nodes
 
                                 </button>
 
-                                <span className="material-icons" style={{ fontSize: '16px', color: '#888' }}>chevron_right</span>
+                                <span className="material-icons" style={{ fontSize: '16px', color: "var(--text-muted)" }}>chevron_right</span>
 
-                                <span className="font-bold" style={{ color: '#222', fontWeight: '700' }}>{deviceName}</span>
+                                <span className="font-bold" style={{ color: "var(--text-primary)", fontWeight: '700' }}>{deviceName}</span>
 
                             </nav>
 
-                            <h2 style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1C1C1E' }}>
+                            <h2 style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: "var(--text-primary)" }}>
 
                                 {deviceName} Analytics
                             </h2>
@@ -738,20 +862,20 @@ const EvaraTankAnalytics = () => {
                             onClick={() => setShowParams(false)}>
                             <div className="rounded-2xl p-6 flex flex-col w-full max-w-md"
                                 style={{
-                                    background: 'linear-gradient(145deg, #e8f0fe 0%, #d1e3f4 50%, #b8d4e8 100%)',
+                                    background: 'var(--bg-secondary)', border: '1px solid var(--card-border)',
                                     boxShadow: '0 20px 40px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3)'
                                 }}
                                 onClick={e => e.stopPropagation()}>
 
                                 <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-[17px] font-bold m-0" style={{ color: '#1c1c1e' }}>Tank Configuration</h3>
+                                    <h3 className="text-[17px] font-bold m-0" style={{ color: "var(--text-primary)" }}>Tank Configuration</h3>
                                     <button onClick={() => setShowParams(false)}
                                         className="flex items-center justify-center rounded-full bg-white border-none cursor-pointer p-0 transition-all hover:scale-110"
                                         style={{
                                             width: 24,
                                             height: 24,
-                                            background: '#f5f5f5',
-                                            color: '#3c3c43',
+                                            background: "var(--bg-secondary)",
+                                            color: "var(--text-secondary)",
                                             fontSize: '18px',
                                             fontWeight: 'bold',
                                             boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
@@ -761,54 +885,54 @@ const EvaraTankAnalytics = () => {
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Length</p>
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Length</p>
                                         <div className="flex items-baseline gap-1 mt-1">
                                             <input type="number" step="0.1" value={localCfg.lengthM}
                                                 onChange={e => patch({ lengthM: parseFloat(e.target.value) || 0 })}
                                                 className="w-full font-bold text-sm bg-transparent border-none outline-none p-0 m-0"
-                                                style={{ color: '#1c1c1e', WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
-                                            <span className="text-sm font-bold" style={{ color: '#1c1c1e' }}>m</span>
+                                                style={{ color: "var(--text-primary)", WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
+                                            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>m</span>
                                         </div>
                                     </div>
 
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Breadth</p>
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Breadth</p>
                                         <div className="flex items-baseline gap-1 mt-1">
                                             <input type="number" step="0.1" value={localCfg.breadthM}
                                                 onChange={e => patch({ breadthM: parseFloat(e.target.value) || 0 })}
                                                 className="w-full font-bold text-sm bg-transparent border-none outline-none p-0 m-0"
-                                                style={{ color: '#1c1c1e', WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
-                                            <span className="text-sm font-bold" style={{ color: '#1c1c1e' }}>m</span>
+                                                style={{ color: "var(--text-primary)", WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
+                                            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>m</span>
                                         </div>
                                     </div>
 
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Height</p>
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Height</p>
                                         <div className="flex items-baseline gap-1 mt-1">
                                             <input type="number" step="0.1" value={localCfg.heightM}
                                                 onChange={e => patch({ heightM: parseFloat(e.target.value) || 0 })}
                                                 className="w-full font-bold text-sm bg-transparent border-none outline-none p-0 m-0"
-                                                style={{ color: '#1c1c1e', WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
-                                            <span className="text-sm font-bold" style={{ color: '#1c1c1e' }}>m</span>
+                                                style={{ color: "var(--text-primary)", WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
+                                            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>m</span>
                                         </div>
                                     </div>
 
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Dead Band</p>
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Dead Band</p>
                                         <div className="flex items-baseline gap-1 mt-1">
                                             <input type="number" step="0.1" value={localCfg.deadBandM}
                                                 onChange={e => patch({ deadBandM: parseFloat(e.target.value) || 0 })}
                                                 className="w-full font-bold text-sm bg-transparent border-none outline-none p-0 m-0"
-                                                style={{ color: '#1c1c1e', WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
-                                            <span className="text-sm font-bold" style={{ color: '#1c1c1e' }}>m</span>
+                                                style={{ color: "var(--text-primary)", WebkitAppearance: 'none', MozAppearance: 'textfield' }} />
+                                            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>m</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="rounded-xl p-4 mb-5" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Estimated Capacity</p>
-                                    <p className="text-2xl font-black mt-1" style={{ color: '#1c1c1e' }}>{formatVolume(previewCapacity)}</p>
+                                <div className="rounded-xl p-4 mb-5" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Estimated Capacity</p>
+                                    <p className="text-2xl font-black mt-1" style={{ color: "var(--text-primary)" }}>{formatVolume(previewCapacity)}</p>
                                 </div>
 
                                 {saveError && (
@@ -831,8 +955,8 @@ const EvaraTankAnalytics = () => {
                                     <button
                                         className="flex-1 font-semibold py-3 rounded-2xl border-none cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
                                         style={{
-                                            background: '#f5f5f5',
-                                            color: '#1c1c1e',
+                                            background: "var(--bg-secondary)",
+                                            color: "var(--text-primary)",
                                             fontSize: '14px'
                                         }}
                                         onClick={() => setShowParams(false)}
@@ -858,7 +982,7 @@ const EvaraTankAnalytics = () => {
 
                                 style={{
 
-                                    background: 'linear-gradient(145deg, #e8f0fe 0%, #d1e3f4 50%, #b8d4e8 100%)',
+                                    background: 'var(--bg-secondary)', border: '1px solid var(--card-border)',
 
                                     boxShadow: '0 20px 40px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3)'
 
@@ -870,7 +994,7 @@ const EvaraTankAnalytics = () => {
 
                                 <div className="flex justify-between items-center mb-6">
 
-                                    <h3 className="text-[17px] font-bold m-0" style={{ color: '#1c1c1e' }}>Node Information</h3>
+                                    <h3 className="text-[17px] font-bold m-0" style={{ color: "var(--text-primary)" }}>Node Information</h3>
 
                                     <button onClick={() => setShowNodeInfo(false)}
 
@@ -882,9 +1006,9 @@ const EvaraTankAnalytics = () => {
 
                                             height: 24,
 
-                                            background: '#f5f5f5',
+                                            background: "var(--bg-secondary)",
 
-                                            color: '#3c3c43',
+                                            color: "var(--text-secondary)",
 
                                             fontSize: '18px',
 
@@ -903,69 +1027,37 @@ const EvaraTankAnalytics = () => {
 
 
                                 <div className="grid grid-cols-2 gap-4">
-
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Device Name</p>
-
-                                        <p className="text-sm font-bold mt-1" style={{ color: '#2c3e50' }}>{deviceName}</p>
-
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Device Name</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: "var(--text-primary)" }}>{deviceName}</p>
                                     </div>
 
-
-
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Hardware ID</p>
-
-                                        <p className="text-sm font-bold mt-1" style={{ color: '#2c3e50' }}>{hardwareId}</p>
-
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Hardware ID</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: "var(--text-primary)" }}>{hardwareId}</p>
                                     </div>
 
-
-
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Device Type</p>
-
-                                        <p className="text-sm font-bold mt-1" style={{ color: '#2c3e50' }}>Water Tank Monitor</p>
-
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Device Type</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: "var(--text-primary)" }}>Water Tank Monitor</p>
                                     </div>
 
-
-
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Location</p>
-
-                                        <p className="text-sm font-bold mt-1" style={{ color: '#2c3e50' }}>Not specified</p>
-
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Location</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: "var(--text-primary)" }}>Not specified</p>
                                     </div>
 
-
-
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Subscription</p>
-
-                                        <p className="text-sm font-bold mt-1" style={{ color: '#2c3e50' }}>PRO</p>
-
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Subscription</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: "var(--text-primary)" }}>PRO</p>
                                     </div>
 
-
-
-                                    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5e7c9a' }}>Status</p>
-
+                                    <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Status</p>
                                         <p className="text-sm font-bold mt-1" style={{ color: isOffline ? '#e74c3c' : '#27ae60' }}>
-
                                             {isOffline ? 'Offline' : 'Online'}
-
                                         </p>
-
                                     </div>
-
                                 </div>
 
 
@@ -1006,9 +1098,9 @@ const EvaraTankAnalytics = () => {
 
                                         style={{
 
-                                            background: '#f5f5f5',
+                                            background: "var(--bg-secondary)",
 
-                                            color: '#1c1c1e',
+                                            color: "var(--text-primary)",
 
                                             fontSize: '14px'
 
@@ -1044,7 +1136,7 @@ const EvaraTankAnalytics = () => {
 
                                 style={{
 
-                                    background: 'linear-gradient(145deg, #e8f0fe 0%, #d1e3f4 50%, #b8d4e8 100%)',
+                                    background: 'var(--bg-secondary)', border: '1px solid var(--card-border)',
 
                                     boxShadow: '0 20px 40px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3)',
 
@@ -1070,7 +1162,7 @@ const EvaraTankAnalytics = () => {
 
                                         {activeInfoPopup === 'deviceHealth' && <div className="p-1.5 rounded-lg" style={{ background: 'rgba(10,132,255,0.15)' }}><Wifi size={18} color="#0A84FF" /></div>}
 
-                                        <h3 className="text-[17px] font-bold m-0" style={{ color: '#1c1c1e' }}>
+                                        <h3 className="text-[17px] font-bold m-0" style={{ color: "var(--text-primary)" }}>
 
                                             {activeInfoPopup === 'fillRate' && 'Fill Rate Details'}
 
@@ -1088,7 +1180,7 @@ const EvaraTankAnalytics = () => {
 
                                         className="flex items-center justify-center rounded-full border-none cursor-pointer p-0 transition-transform hover:scale-110"
 
-                                        style={{ width: 24, height: 24, background: '#f5f5f5', color: '#3c3c43', fontSize: '18px', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                                        style={{ width: 24, height: 24, background: "var(--bg-secondary)", color: "var(--text-secondary)", fontSize: '18px', fontWeight: 'bold', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
 
                                         &times;
 
@@ -1104,19 +1196,19 @@ const EvaraTankAnalytics = () => {
 
                                         <>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Refills Today</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Refills Today</p>
 
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>{waterAnalytics.refillsToday}</p>
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>{waterAnalytics.refillsToday}</p>
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Last Refill Time</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Last Refill Time</p>
 
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>
 
                                                     {waterAnalytics.lastRefillTime ? new Date(waterAnalytics.lastRefillTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}
 
@@ -1124,11 +1216,11 @@ const EvaraTankAnalytics = () => {
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Avg. Refill Time</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Avg. Refill Time</p>
 
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>
 
                                                     {waterAnalytics.avgRefillTimeMinutes !== null ? `${Math.round(waterAnalytics.avgRefillTimeMinutes)} min` : '--'}
 
@@ -1146,27 +1238,27 @@ const EvaraTankAnalytics = () => {
 
                                         <>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Today's Consumption</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Today's Consumption</p>
 
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>{waterAnalytics.todaysConsumptionLiters > 0 ? `${waterAnalytics.todaysConsumptionLiters.toFixed(0)} L` : '--'}</p>
-
-                                            </div>
-
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Peak Consumption Time</p>
-
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>{waterAnalytics.peakConsumptionTime ? new Date(waterAnalytics.peakConsumptionTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</p>
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>{waterAnalytics.todaysConsumptionLiters > 0 ? `${waterAnalytics.todaysConsumptionLiters.toFixed(0)} L` : '--'}</p>
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Peak Drain Rate</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Peak Consumption Time</p>
 
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>{waterAnalytics.peakConsumptionRateLpm ? `${waterAnalytics.peakConsumptionRateLpm.toFixed(0)} L/min` : '--'}</p>
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>{waterAnalytics.peakConsumptionTime ? new Date(waterAnalytics.peakConsumptionTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</p>
+
+                                            </div>
+
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Peak Drain Rate</p>
+
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>{waterAnalytics.peakConsumptionRateLpm ? `${waterAnalytics.peakConsumptionRateLpm.toFixed(0)} L/min` : '--'}</p>
 
                                             </div>
 
@@ -1180,25 +1272,25 @@ const EvaraTankAnalytics = () => {
 
                                         <>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Low Level (&lt;20%)</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Low Level (&lt;20%)</p>
 
                                                 <p className="text-sm font-bold mt-1 m-0" style={{ color: waterAnalytics.alerts.lowLevel ? '#FF3B30' : '#34C759' }}>{waterAnalytics.alerts.lowLevel ? '⚠ Active' : '✓ OK'}</p>
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Overflow (&gt;95%)</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Overflow (&gt;95%)</p>
 
                                                 <p className="text-sm font-bold mt-1 m-0" style={{ color: waterAnalytics.alerts.overflow ? '#FF9500' : '#34C759' }}>{waterAnalytics.alerts.overflow ? '⚠ Active' : '✓ OK'}</p>
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>High Drain Rate</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>High Drain Rate</p>
 
                                                 <p className="text-sm font-bold mt-1 m-0" style={{ color: waterAnalytics.alerts.highDrain ? '#FF3B30' : '#34C759' }}>{waterAnalytics.alerts.highDrain ? `⚠ ${Math.abs(waterAnalytics.drainRateLpm).toFixed(0)} L/min` : '✓ OK'}</p>
 
@@ -1214,9 +1306,9 @@ const EvaraTankAnalytics = () => {
 
                                         <>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Connection Status</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Connection Status</p>
 
                                                 <div className="flex items-center gap-1.5 mt-1">
 
@@ -1228,27 +1320,27 @@ const EvaraTankAnalytics = () => {
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Sensor OK (&lt;5 min)</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Sensor OK (&lt;5 min)</p>
 
                                                 <p className="text-sm font-bold mt-1 m-0" style={{ color: waterAnalytics.deviceHealth.sensorOk ? '#34C759' : '#FF3B30' }}>{waterAnalytics.deviceHealth.sensorOk ? '✓ Yes' : '✗ No'}</p>
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Data Valid</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Data Valid</p>
 
                                                 <p className="text-sm font-bold mt-1 m-0" style={{ color: waterAnalytics.deviceHealth.dataValid ? '#34C759' : '#FF3B30' }}>{waterAnalytics.deviceHealth.dataValid ? '✓ Yes' : '✗ No'}</p>
 
                                             </div>
 
-                                            <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                            <div className="rounded-xl p-4" style={{ background: "var(--card-bg)", border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: '#5e7c9a' }}>Last Comm. Time</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-wider m-0" style={{ color: "var(--text-muted)" }}>Last Comm. Time</p>
 
-                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: '#2c3e50' }}>
+                                                <p className="text-sm font-bold mt-1 m-0" style={{ color: "var(--text-primary)" }}>
 
                                                     {bestTimestamp ? new Date(bestTimestamp).toLocaleString() : '--'}
 
@@ -1272,9 +1364,9 @@ const EvaraTankAnalytics = () => {
 
                                         style={{
 
-                                            background: '#f5f5f5',
+                                            background: "var(--bg-secondary)",
 
-                                            color: '#1c1c1e',
+                                            color: "var(--text-primary)",
 
                                             fontSize: '14px'
 
@@ -1298,224 +1390,223 @@ const EvaraTankAnalytics = () => {
 
 
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start w-full">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch w-full">
 
                         {/* COLUMN 1: TANK & ESTIMATIONS */}
                         <div className="flex flex-col gap-4 w-full">
 
                             {/* TANK VISUALIZER */}
                             {(showTankLevelParam || showVolumeParam) && (
-                                <div className="apple-glass-card rounded-[2.5rem] p-3 flex flex-col relative overflow-hidden">
+                                <div className="apple-glass-card rounded-[2.5rem] p-3 flex flex-col relative overflow-hidden h-full">
 
-                                <div className="flex justify-between items-center mb-2 z-10 w-full">
-                                    <div>
-                                        <h3 className="text-xl font-semibold m-0 leading-tight">{deviceName}</h3>
+                                    <div className="flex justify-between items-center mb-2 z-10 w-full">
+                                        <div>
+                                            <h3 className="text-xl font-semibold m-0 leading-tight">{deviceName}</h3>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <span className="flex items-center gap-1 text-xs font-semibold rounded-md px-2 py-1"
+                                                style={{ color: '#0A84FF', background: 'rgba(10,132,255,0.1)' }}>
+                                                <span className="material-symbols-rounded" style={{ fontSize: 14 }}>sync</span> Live
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center">
-                                        <span className="flex items-center gap-1 text-xs font-semibold rounded-md px-2 py-1"
-                                            style={{ color: '#0A84FF', background: 'rgba(10,132,255,0.1)' }}>
-                                            <span className="material-symbols-rounded" style={{ fontSize: 14 }}>sync</span> Live
-                                        </span>
-                                    </div>
-                                </div>
 
-                                {showTankLevelParam && (
-                                <div className="flex items-center justify-center py-0 z-10 mt-4 mb-2">
+                                    {showTankLevelParam && (
+                                        <div className="flex items-center justify-center py-0 z-10 mt-4 mb-2">
 
-                                    <div className="relative" style={{ width: 180, height: 250 }}>
+                                            <div className="relative" style={{ width: 180, height: 250 }}>
 
-                                        <div className="absolute inset-0 rounded-[45px] overflow-hidden z-10 tank-glass"
+                                                <div className="absolute inset-0 rounded-[45px] overflow-hidden z-10 tank-glass"
+                                                    style={{ border: '2.5px solid var(--glass-accent)', boxShadow: '0 16px 36px rgba(0,80,200,0.15), inset 0 1px 0 rgba(255,255,255,0.5)', background: 'rgba(230,240,255,0.18)' }}>
 
-                                            style={{ border: '2.5px solid rgba(255,255,255,0.65)', boxShadow: '0 16px 36px rgba(0,80,200,0.15), inset 0 1px 0 rgba(255,255,255,0.5)', background: 'rgba(230,240,255,0.18)' }}>
+                                                    {/* Glass shine left */}
+                                                    <div className="absolute top-0 bottom-0 left-2" style={{ width: 14, background: 'linear-gradient(90deg,rgba(255,255,255,0.55),transparent)', filter: 'blur(2px)', zIndex: 30, borderRadius: '45px 0 0 45px' }} />
 
-                                            {/* Glass shine left */}
-                                            <div className="absolute top-0 bottom-0 left-2" style={{ width: 14, background: 'linear-gradient(90deg,rgba(255,255,255,0.55),transparent)', filter: 'blur(2px)', zIndex: 30, borderRadius: '45px 0 0 45px' }} />
+                                                    {/* Glass shine right */}
+                                                    <div className="absolute top-0 bottom-0 right-1" style={{ width: 7, background: 'linear-gradient(270deg,rgba(255,255,255,0.35),transparent)', filter: 'blur(1px)', zIndex: 30 }} />
 
-                                            {/* Glass shine right */}
-                                            <div className="absolute top-0 bottom-0 right-1" style={{ width: 7, background: 'linear-gradient(270deg,rgba(255,255,255,0.35),transparent)', filter: 'blur(1px)', zIndex: 30 }} />
+                                                    {/* Water fill */}
+                                                    <div className="absolute bottom-0 left-0 right-0 overflow-hidden z-20"
 
-                                            {/* Water fill */}
-                                            <div className="absolute bottom-0 left-0 right-0 overflow-hidden z-20"
+                                                        style={{ height: (telemetryLoading && !metrics.isDataValid) ? '50%' : `${pct}%`, transition: 'height 1.5s cubic-bezier(0.34,1.56,0.64,1)', background: 'linear-gradient(180deg, #5AC8FA 0%, #0A84FF 35%, #0055D4 70%, #003DAA 100%)' }}>
 
-                                                style={{ height: (telemetryLoading && !metrics.isDataValid) ? '50%' : `${pct}%`, transition: 'height 1.5s cubic-bezier(0.34,1.56,0.64,1)', background: 'linear-gradient(180deg, #5AC8FA 0%, #0A84FF 35%, #0055D4 70%, #003DAA 100%)' }}>
+                                                        {/* Shimmer overlay */}
+                                                        <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 60%)', mixBlendMode: 'overlay' }} />
 
-                                                {/* Shimmer overlay */}
-                                                <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 60%)', mixBlendMode: 'overlay' }} />
+                                                        {/* Level text inside water if high enough */}
 
-                                                {/* Level text inside water if high enough */}
+                                                        {pct > 15 && (
 
-                                                {pct > 15 && (
+                                                            <div className="absolute top-5 left-0 right-0 text-center pointer-events-none z-30"
 
-                                                    <div className="absolute top-5 left-0 right-0 text-center pointer-events-none z-30"
+                                                                style={{
 
-                                                        style={{
+                                                                    color: '#ffffff',
 
-                                                            color: '#ffffff',
+                                                                    fontSize: '38px',
 
-                                                            fontSize: '38px',
+                                                                    fontWeight: 800,
 
-                                                            fontWeight: 800,
+                                                                    lineHeight: 1,
 
-                                                            lineHeight: 1,
+                                                                    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
 
-                                                            textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                                                                    letterSpacing: '-0.5px'
 
-                                                            letterSpacing: '-0.5px'
+                                                                }}>
 
-                                                        }}>
+                                                                {Math.round(pct)}%
 
-                                                        {Math.round(pct)}%
-
-                                                        {/* Enhanced Conditional Processing Indicator */}
-                                                        {(metrics as any).isCorrected && (
-                                                            <div className="absolute -top-1 -right-1 flex flex-col items-center">
-                                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-pulse ${(metrics as any).data_label === 'PREDICTED'
-                                                                    ? 'bg-red-500'
-                                                                    : (metrics as any).data_label === 'CORRECTED'
-                                                                        ? 'bg-orange-500'
-                                                                        : 'bg-blue-500'
-                                                                    }`}
-                                                                    title={`Conditional Processing: ${(metrics as any).data_label} - ${(metrics as any).correction_reason || 'Intelligent correction'}`}>
-                                                                    <span className="text-white text-[10px] font-black">
-                                                                        {(metrics as any).data_label === 'PREDICTED' ? 'P' :
-                                                                            (metrics as any).data_label === 'CORRECTED' ? 'C' : '!'}
-                                                                    </span>
-                                                                </div>
-                                                                <span className={`text-[10px] font-bold mt-1 uppercase tracking-tighter ${(metrics as any).data_label === 'PREDICTED'
-                                                                    ? 'text-red-400'
-                                                                    : (metrics as any).data_label === 'CORRECTED'
-                                                                        ? 'text-orange-400'
-                                                                        : 'text-blue-400'
-                                                                    }`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
-                                                                    {(metrics as any).data_label || 'CORR'}
-                                                                </span>
-                                                                {(metrics as any).prediction_mode && (
-                                                                    <span className="text-[8px] text-red-300 font-bold">PRED MODE</span>
+                                                                {/* Enhanced Conditional Processing Indicator */}
+                                                                {(metrics as any).isCorrected && (
+                                                                    <div className="absolute -top-1 -right-1 flex flex-col items-center">
+                                                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-pulse ${(metrics as any).data_label === 'PREDICTED'
+                                                                            ? 'bg-red-500'
+                                                                            : (metrics as any).data_label === 'CORRECTED'
+                                                                                ? 'bg-orange-500'
+                                                                                : 'bg-blue-500'
+                                                                            }`}
+                                                                            title={`Conditional Processing: ${(metrics as any).data_label} - ${(metrics as any).correction_reason || 'Intelligent correction'}`}>
+                                                                            <span className="text-white text-[10px] font-black">
+                                                                                {(metrics as any).data_label === 'PREDICTED' ? 'P' :
+                                                                                    (metrics as any).data_label === 'CORRECTED' ? 'C' : '!'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span className={`text-[10px] font-bold mt-1 uppercase tracking-tighter ${(metrics as any).data_label === 'PREDICTED'
+                                                                            ? 'text-red-400'
+                                                                            : (metrics as any).data_label === 'CORRECTED'
+                                                                                ? 'text-orange-400'
+                                                                                : 'text-blue-400'
+                                                                            }`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                                                                            {(metrics as any).data_label || 'CORR'}
+                                                                        </span>
+                                                                        {(metrics as any).prediction_mode && (
+                                                                            <span className="text-[8px] text-red-300 font-bold">PRED MODE</span>
+                                                                        )}
+                                                                    </div>
                                                                 )}
+
                                                             </div>
+
                                                         )}
 
+                                                        {/* Animated wave surface */}
+                                                        <div className="absolute top-0 w-[200%] left-0 wave-animation" style={{ opacity: 0.55, height: '20px' }}>
+
+                                                            <svg viewBox="0 0 800 40" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+
+                                                                <path d="M 0,20 Q 100,5 200,20 T 400,20 T 600,20 T 800,20 L 800,40 L 0,40 Z" fill="rgba(255,255,255,0.45)" />
+
+                                                            </svg>
+
+                                                        </div>
+
                                                     </div>
 
-                                                )}
 
-                                                {/* Animated wave surface */}
-                                                <div className="absolute top-0 w-[200%] left-0 wave-animation" style={{ opacity: 0.55, height: '20px' }}>
 
-                                                    <svg viewBox="0 0 800 40" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+                                                    {/* Level tick marks — right side */}
+                                                    <div className="absolute right-2 top-0 bottom-0 flex flex-col justify-between py-4 z-30" style={{ opacity: 0.7, width: 30 }}>
 
-                                                        <path d="M 0,20 Q 100,5 200,20 T 400,20 T 600,20 T 800,20 L 800,40 L 0,40 Z" fill="rgba(255,255,255,0.45)" />
+                                                        {(['100', '75', '50', '25', '0'] as string[]).map((lbl, i) => (
 
-                                                    </svg>
+                                                            <div key={i} className="flex items-center justify-end gap-1">
+
+                                                                <span style={{ fontSize: 8, fontWeight: 700, fontFamily: 'monospace', color: pct >= Number(lbl) ? '#e2f0ff' : '#64748b' }}>{lbl}</span>
+
+                                                                <div style={{ width: 8, height: 1.5, background: pct >= Number(lbl) ? 'rgba(255,255,255,0.7)' : '#94a3b8', borderRadius: 2 }} />
+
+                                                            </div>
+
+                                                        ))}
+
+                                                    </div>
 
                                                 </div>
 
                                             </div>
 
-
-
-                                            {/* Level tick marks — right side */}
-                                            <div className="absolute right-2 top-0 bottom-0 flex flex-col justify-between py-4 z-30" style={{ opacity: 0.7, width: 30 }}>
-
-                                                {(['100', '75', '50', '25', '0'] as string[]).map((lbl, i) => (
-
-                                                    <div key={i} className="flex items-center justify-end gap-1">
-
-                                                        <span style={{ fontSize: 8, fontWeight: 700, fontFamily: 'monospace', color: pct >= Number(lbl) ? '#e2f0ff' : '#64748b' }}>{lbl}</span>
-
-                                                        <div style={{ width: 8, height: 1.5, background: pct >= Number(lbl) ? 'rgba(255,255,255,0.7)' : '#94a3b8', borderRadius: 2 }} />
-
-                                                    </div>
-
-                                                ))}
-
-                                            </div>
-
                                         </div>
-
-                                    </div>
-
-                                </div>
-                                )}
-
-
-
-                                <div className="flex flex-col mt-4 pt-0 gap-2 z-10 w-full">
-                                    {showVolumeParam && (
-                                    <div className="grid grid-cols-2 gap-2 w-full">
-                                        <div className="text-left rounded-xl p-3 flex flex-col justify-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)' }}>
-                                            <p className="text-[10px] font-bold uppercase tracking-wider m-0 mb-1" style={{ color: '#8E8E93' }}>Total Cap</p>
-                                            <p className="text-lg font-black m-0 tracking-tight" style={{ color: '#1C1C1E' }}>{Math.round(metrics.capacityLitres).toLocaleString()} L</p>
-                                        </div>
-                                        <div className="text-left rounded-xl p-3 flex flex-col justify-center" style={{ background: 'rgba(0,122,255,0.05)', border: '1px solid rgba(0,122,255,0.1)' }}>
-                                            <p className="text-[10px] font-bold uppercase tracking-wider m-0 mb-1" style={{ color: '#007AFF' }}>Current Volume</p>
-                                            <p className="text-lg font-black m-0 tracking-tight" style={{ color: '#004BA0' }}>{Math.round(metrics.volumeLitres).toLocaleString()} L</p>
-                                        </div>
-                                    </div>
                                     )}
 
-                                    <div className="text-center w-full mt-0.5">
-                                        {latestPoint?.predictions && (latestPoint.predictions.timeToEmpty || latestPoint.predictions.timeToFull) ? (
-                                            <div className="flex flex-col gap-1 items-center">
-                                                <div className={`px-4 py-2 rounded-full text-[11px] font-bold flex items-center gap-2 shadow-sm border ${latestPoint.predictions.timeToEmpty
-                                                    ? 'bg-red-50/80 text-red-600 border-red-100'
-                                                    : 'bg-green-50/80 text-green-600 border-green-100'
-                                                    }`}>
-                                                    <span className="material-symbols-rounded" style={{ fontSize: 16 }}>
-                                                        {latestPoint.predictions.timeToEmpty ? 'hourglass_bottom' : 'hourglass_top'}
-                                                    </span>
-                                                    {latestPoint.predictions.timeToEmpty ? (
-                                                        <span>ESTIMATED EMPTY IN <b>{formatDuration(latestPoint.predictions.timeToEmpty)}</b></span>
-                                                    ) : (
-                                                        <span>ESTIMATED FULL IN <b>{formatDuration(latestPoint.predictions.timeToFull)}</b></span>
-                                                    )}
+
+
+                                    <div className="flex flex-col mt-4 pt-0 gap-2 z-10 w-full">
+                                        {showVolumeParam && (
+                                            <div className="grid grid-cols-2 gap-2 w-full">
+                                                <div className="text-left rounded-xl p-3 flex flex-col justify-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)' }}>
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider m-0 mb-1" style={{ color: "var(--text-primary)" }}>Total Cap</p>
+                                                    <p className="text-lg font-black m-0 tracking-tight" style={{ color: "var(--text-primary)" }}>{Math.round(metrics.capacityLitres).toLocaleString()} L</p>
+                                                </div>
+                                                <div className="text-left rounded-xl p-3 flex flex-col justify-center" style={{ background: 'rgba(0,122,255,0.05)', border: '1px solid rgba(0,122,255,0.1)' }}>
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider m-0 mb-1" style={{ color: '#007AFF' }}>Current Volume</p>
+                                                    <p className="text-lg font-black m-0 tracking-tight" style={{ color: '#004BA0' }}>{Math.round(metrics.volumeLitres).toLocaleString()} L</p>
                                                 </div>
                                             </div>
-                                        ) : null}
+                                        )}
+
+                                        <div className="text-center w-full mt-0.5">
+                                            {latestPoint?.predictions && (latestPoint.predictions.timeToEmpty || latestPoint.predictions.timeToFull) ? (
+                                                <div className="flex flex-col gap-1 items-center">
+                                                    <div className={`px-4 py-2 rounded-full text-[11px] font-bold flex items-center gap-2 shadow-sm border ${latestPoint.predictions.timeToEmpty
+                                                        ? 'bg-red-50/80 text-red-600 border-red-100'
+                                                        : 'bg-green-50/80 text-green-600 border-green-100'
+                                                        }`}>
+                                                        <span className="material-symbols-rounded" style={{ fontSize: 16 }}>
+                                                            {latestPoint.predictions.timeToEmpty ? 'hourglass_bottom' : 'hourglass_top'}
+                                                        </span>
+                                                        {latestPoint.predictions.timeToEmpty ? (
+                                                            <span>ESTIMATED EMPTY IN <b>{formatDuration(latestPoint.predictions.timeToEmpty)}</b></span>
+                                                        ) : (
+                                                            <span>ESTIMATED FULL IN <b>{formatDuration(latestPoint.predictions.timeToFull)}</b></span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : null}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
                             )}
 
                             {/* Estimation Cards - Moved here below Tank Card */}
                             {showEstimationsParam && (
-                            <div className="grid grid-cols-2 gap-4 w-full">
-                                <div className="apple-glass-card p-4 rounded-2xl flex flex-col justify-between" style={{ background: 'rgba(255, 149, 0, 0.1)', border: '1px solid rgba(255, 149, 0, 0.2)', minHeight: '120px', boxShadow: '0 8px 32px rgba(255, 149, 0, 0.05)' }}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="p-1.5 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.15)' }}>
-                                            <Timer size={18} color="#FF9500" />
+                                <div className="grid grid-cols-2 gap-4 w-full">
+                                    <div className="apple-glass-card p-4 rounded-2xl flex flex-col justify-between" style={{ background: 'rgba(255, 149, 0, 0.1)', border: '1px solid rgba(255, 149, 0, 0.2)', minHeight: '120px', boxShadow: '0 8px 32px rgba(255, 149, 0, 0.05)' }}>
+                                        <div className="flex justify-between items-start">
+                                            <div className="p-1.5 rounded-lg" style={{ background: 'rgba(255, 149, 0, 0.15)' }}>
+                                                <Timer size={18} color="#FF9500" />
+                                            </div>
+                                            <Info size={14} color="#1C1C1E" className="cursor-help opacity-60 hover:opacity-100" />
                                         </div>
-                                        <Info size={14} color="#8E8E93" className="cursor-help opacity-60 hover:opacity-100" />
+                                        <div className="flex flex-col mt-2">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-primary)" }}>Est. Time Until Empty</span>
+                                            <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: "var(--text-primary)" }}>
+                                                {waterAnalytics.estimatedEmptyTimeMinutes ?
+                                                    `${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes % 60)}m`
+                                                    : '--'}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col mt-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>Est. Time Until Empty</span>
-                                        <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: '#1C1C1E' }}>
-                                            {waterAnalytics.estimatedEmptyTimeMinutes ?
-                                                `${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedEmptyTimeMinutes % 60)}m`
-                                                : '--'}
-                                        </span>
-                                    </div>
-                                </div>
 
-                                <div className="apple-glass-card p-4 rounded-2xl flex flex-col justify-between" style={{ background: 'rgba(10, 132, 255, 0.1)', border: '1px solid rgba(10, 132, 255, 0.2)', minHeight: '120px', boxShadow: '0 8px 32px rgba(10, 132, 255, 0.05)' }}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="p-1.5 rounded-lg" style={{ background: 'rgba(10, 132, 255, 0.15)' }}>
-                                            <Droplets size={18} color="#0A84FF" />
+                                    <div className="apple-glass-card p-4 rounded-2xl flex flex-col justify-between" style={{ background: 'rgba(10, 132, 255, 0.1)', border: '1px solid rgba(10, 132, 255, 0.2)', minHeight: '120px', boxShadow: '0 8px 32px rgba(10, 132, 255, 0.05)' }}>
+                                        <div className="flex justify-between items-start">
+                                            <div className="p-1.5 rounded-lg" style={{ background: 'rgba(10, 132, 255, 0.15)' }}>
+                                                <Droplets size={18} color="#0A84FF" />
+                                            </div>
+                                            <Info size={14} color="#1C1C1E" className="cursor-help opacity-60 hover:opacity-100" />
                                         </div>
-                                        <Info size={14} color="#8E8E93" className="cursor-help opacity-60 hover:opacity-100" />
-                                    </div>
-                                    <div className="flex flex-col mt-2">
-                                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8E8E93' }}>Est. Time Until Full</span>
-                                        <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: '#1C1C1E' }}>
-                                            {waterAnalytics.estimatedFullTimeMinutes ?
-                                                (waterAnalytics.estimatedFullTimeMinutes > 60 ?
-                                                    `${Math.floor(waterAnalytics.estimatedFullTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedFullTimeMinutes % 60)}m`
-                                                    : `${Math.floor(waterAnalytics.estimatedFullTimeMinutes)} min`)
-                                                : '--'}
-                                        </span>
+                                        <div className="flex flex-col mt-2">
+                                            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-primary)" }}>Est. Time Until Full</span>
+                                            <span className="text-lg font-black tracking-tight mt-0.5" style={{ color: "var(--text-primary)" }}>
+                                                {waterAnalytics.estimatedFullTimeMinutes ?
+                                                    (waterAnalytics.estimatedFullTimeMinutes > 60 ?
+                                                        `${Math.floor(waterAnalytics.estimatedFullTimeMinutes / 60)}h ${Math.floor(waterAnalytics.estimatedFullTimeMinutes % 60)}m`
+                                                        : `${Math.floor(waterAnalytics.estimatedFullTimeMinutes)} min`)
+                                                    : '--'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
                             )}
                         </div>
 
@@ -1525,187 +1616,213 @@ const EvaraTankAnalytics = () => {
 
                         <div className="lg:col-span-2 flex flex-col gap-4 w-full h-full">
 
+                            {/* Water State Badges moved into individual cards below */}
+
                             {/* RATE CARDS */}
- 
-                             <div className="grid gap-[1rem] w-full" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
- 
-                                 {showFillRateParam && (
-                                     <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between h-full w-full min-h-[180px] max-h-[45vh]" style={{ background: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
-                                         <div className="flex justify-between items-start">
-                                             <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(52,199,89,0.15)' }}>
-                                                 <TrendingUp size={18} color="#34C759" />
-                                             </div>
-                                             <div className="flex items-center gap-2">
-                                                 {user?.role === 'superadmin' && (deviceConfig as any)?.customer_config?.showFillRate === false && (
-                                                     <span className="text-[10px] font-bold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
-                                                 )}
-                                                 <button onClick={() => setActiveInfoPopup('fillRate')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
-                                                     <Info size={16} color="#8E8E93" />
-                                                 </button>
-                                             </div>
-                                         </div>
-                                         <div className="flex flex-col mt-auto pt-3 gap-0.5">
-                                             <p className="text-[12px] font-bold uppercase tracking-wider m-0" style={{ color: '#8E8E93' }}>Fill Rate</p>
-                                             <p className="text-[26px] leading-[1.1] font-black m-0 tracking-tight" style={{ color: waterAnalytics.fillRateLpm > 500 ? '#FF3B30' : '#34C759' }}>
-                                                 {waterAnalytics.fillRateLpm > 500 ? (
-                                                     <span style={{ fontSize: '13px', color: '#FF3B30' }}>Invalid reading</span>
-                                                 ) : waterAnalytics.fillRateLpm > 0 ? (
-                                                     <>+{waterAnalytics.fillRateLpm.toFixed(0)} <span className="text-[13px] font-bold" style={{ color: '#8E8E93' }}>L/min</span></>
-                                                 ) : waterAnalytics.rateDataValid && waterAnalytics.drainRateLpm === 0 ? (
-                                                     <span style={{ fontSize: '16px', color: '#8E8E93' }}>Stable</span>
-                                                 ) : '--'}
-                                             </p>
-                                         </div>
-                                     </div>
-                                 )}
- 
-                                 {showConsumptionParam && (
-                                     <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between h-full w-full min-h-[180px] max-h-[45vh]" style={{ background: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
-                                         <div className="flex justify-between items-start">
-                                             <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(255,59,48,0.15)' }}>
-                                                 <TrendingDown size={18} color="#FF3B30" />
-                                             </div>
-                                             <div className="flex items-center gap-2">
-                                                 {user?.role === 'superadmin' && (deviceConfig as any)?.customer_config?.showConsumption === false && (
-                                                     <span className="text-[10px] font-bold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
-                                                 )}
-                                                 <button onClick={() => setActiveInfoPopup('consumption')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
-                                                     <Info size={16} color="#8E8E93" />
-                                                 </button>
-                                             </div>
-                                         </div>
-                                         <div className="flex flex-col mt-auto pt-3 gap-0.5">
-                                             <p className="text-[12px] font-bold uppercase tracking-wider m-0" style={{ color: '#8E8E93' }}>Consumption</p>
-                                             <p className="text-[26px] leading-[1.1] font-black m-0 tracking-tight" style={{ color: waterAnalytics.drainRateLpm > 500 ? '#FF3B30' : '#FF3B30' }}>
-                                                 {waterAnalytics.drainRateLpm > 500 ? (
-                                                     <span style={{ fontSize: '13px', color: '#FF3B30' }}>Invalid reading</span>
-                                                 ) : waterAnalytics.drainRateLpm > 0 ? (
-                                                     <>{Math.abs(waterAnalytics.drainRateLpm).toFixed(0)} <span className="text-[13px] font-bold" style={{ color: '#8E8E93' }}>L/min</span></>
-                                                 ) : waterAnalytics.rateDataValid && waterAnalytics.fillRateLpm === 0 ? (
-                                                     <span style={{ fontSize: '16px', color: '#8E8E93' }}>Stable</span>
-                                                 ) : '--'}
-                                             </p>
-                                         </div>
-                                     </div>
-                                 )}
- 
-                                 {showAlertsParam && (
-                                     <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between h-full w-full min-h-[180px] max-h-[45vh]" style={{ background: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
-                                         <div className="flex justify-between items-start">
-                                             <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(175,82,222,0.15)' }}>
-                                                 <Bell size={18} color="#AF52DE" />
-                                             </div>
-                                             <div className="flex items-center gap-2">
-                                                 {user?.role === 'superadmin' && (deviceConfig as any)?.customer_config?.showAlerts === false && (
-                                                     <span className="text-[10px] font-bold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
-                                                 )}
-                                                 <button onClick={() => setActiveInfoPopup('alerts')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
-                                                     <Info size={16} color="#8E8E93" />
-                                                 </button>
-                                             </div>
-                                         </div>
-                                         <div className="flex flex-col mt-auto pt-3 gap-0.5">
-                                             <p className="text-[12px] font-bold uppercase tracking-wider m-0" style={{ color: '#8E8E93' }}>Alerts</p>
-                                             <p className="text-[26px] leading-[1.1] font-black m-0 tracking-tight" style={{ color: waterAnalytics.alerts.activeCount > 0 ? '#FF3B30' : '#1C1C1E' }}>
-                                                 {waterAnalytics.alerts.activeCount} <span className="text-[13px] font-bold" style={{ color: '#8E8E93' }}>Active</span>
-                                             </p>
-                                         </div>
-                                     </div>
-                                 )}
- 
-                                 {showDeviceHealthParam && (
-                                     <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between h-full w-full min-h-[180px] max-h-[45vh]" style={{ background: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
-                                         <div className="flex justify-between items-start">
-                                             <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(10,132,255,0.15)' }}>
-                                                 <Wifi size={18} color="#0A84FF" />
-                                             </div>
-                                             <div className="flex items-center gap-2">
-                                                 {user?.role === 'superadmin' && (deviceConfig as any)?.customer_config?.showDeviceHealth === false && (
-                                                     <span className="text-[10px] font-bold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
-                                                 )}
-                                                 <button onClick={() => setActiveInfoPopup('deviceHealth')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
-                                                     <Info size={16} color="#8E8E93" />
-                                                 </button>
-                                             </div>
-                                         </div>
-                                         <div className="flex flex-col mt-auto pt-3 gap-0.5">
-                                             <p className="text-[12px] font-bold uppercase tracking-wider m-0" style={{ color: '#8E8E93' }}>Device Health</p>
-                                             <p className={`leading-[1.1] font-black m-0 tracking-tight ${waterAnalytics.deviceHealth.status === 'Healthy' ? 'text-[26px]' : 'text-[18px]'
-                                                 }`} style={{ color: waterAnalytics.deviceHealth.status === 'Healthy' ? '#34C759' : waterAnalytics.deviceHealth.status === 'Warning' ? '#FF9500' : '#FF3B30' }}>
-                                                 {waterAnalytics.deviceHealth.status}
-                                             </p>
-                                         </div>
-                                     </div>
-                                 )}
- 
-                             </div>
+
+                            <div className="grid gap-4 w-full" style={{
+                                gridTemplateColumns: `repeat(${[showFillRateParam, showConsumptionParam, showAlertsParam, showDeviceHealthParam].filter(Boolean).length}, 1fr)`
+                            }}>
+
+                                {showFillRateParam && (
+                                    <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between w-full min-h-[160px] max-h-[45vh]" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
+                                        <div className="flex justify-between items-center w-full">
+                                            <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(52,199,89,0.15)' }}>
+                                                <TrendingUp size={18} color="#34C759" />
+                                            </div>
+                                            {user?.role === 'superadmin' && customerConfig.showFillRate === false && (
+                                                <span className="text-[10px] font-bold bg-gray-200 text-black px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
+                                            )}
+                                            
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => setActiveInfoPopup('fillRate')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
+                                                    <Info size={14} color="#1C1C1E" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col mt-auto pt-1 gap-0.5">
+                                            <p className="text-[12px] font-black uppercase tracking-wider m-0" style={{ color: "var(--text-primary)" }}>Fill Rate</p>
+                                            <p className="text-[26px] leading-[1.1] font-black m-0 tracking-tight" style={{ color: waterAnalytics.fillRateLpm > 500 ? '#FF3B30' : '#34C759' }}>
+                                                {waterAnalytics.fillRateLpm > 500 ? (
+                                                    <span style={{ fontSize: '13px', color: '#FF3B30' }}>Invalid reading</span>
+                                                ) : waterAnalytics.fillRateLpm > 0 ? (
+                                                    <>+{waterAnalytics.fillRateLpm.toFixed(0)} <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>L/min</span></>
+                                                ) : waterAnalytics.rateDataValid && waterAnalytics.drainRateLpm === 0 ? (
+                                                    <span style={{ fontSize: '16px', color: "var(--text-primary)" }}>Stable</span>
+                                                ) : '--'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {showConsumptionParam && (
+                                    <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between w-full min-h-[160px] max-h-[45vh]" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
+                                        <div className="flex justify-between items-center w-full">
+                                            <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(255,59,48,0.15)' }}>
+                                                <TrendingDown size={18} color="#FF3B30" />
+                                            </div>
+                                            {user?.role === 'superadmin' && customerConfig.showConsumption === false && (
+                                                <span className="text-[10px] font-bold bg-gray-200 text-black px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
+                                            )}
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => setActiveInfoPopup('consumption')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
+                                                    <Info size={14} color="#1C1C1E" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col mt-auto pt-1 gap-0.5">
+                                            <p className="text-[12px] font-black uppercase tracking-wider m-0" style={{ color: "var(--text-primary)" }}>Consumption</p>
+                                            <p className="text-[26px] leading-[1.1] font-black m-0 tracking-tight" style={{ color: waterAnalytics.drainRateLpm > 500 ? '#FF3B30' : '#FF3B30' }}>
+                                                {waterAnalytics.drainRateLpm > 500 ? (
+                                                    <span style={{ fontSize: '13px', color: '#FF3B30' }}>Invalid reading</span>
+                                                ) : waterAnalytics.drainRateLpm > 0 ? (
+                                                    <>{Math.abs(waterAnalytics.drainRateLpm).toFixed(0)} <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>L/min</span></>
+                                                ) : waterAnalytics.rateDataValid && waterAnalytics.fillRateLpm === 0 ? (
+                                                    <span style={{ fontSize: '16px', color: "var(--text-primary)" }}>Stable</span>
+                                                ) : '--'}
+                                            </p>
+
+                                            {/* CHANGE 3: Show today's consumption total */}
+                                            {waterAnalytics.todaysConsumptionLiters > 0 && (
+                                              <p className="text-[10px] font-bold mt-1.5 m-0 opacity-60" style={{ color: "var(--text-primary)" }}>
+                                                {waterAnalytics.todaysConsumptionLiters.toFixed(0)} L processed today
+                                              </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {showAlertsParam && (
+                                    <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between w-full min-h-[160px] max-h-[45vh]" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
+                                        <div className="flex justify-between items-center w-full">
+                                            <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(175,82,222,0.15)' }}>
+                                                <Bell size={18} color="#AF52DE" />
+                                            </div>
+                                            {user?.role === 'superadmin' && customerConfig.showAlerts === false && (
+                                                <span className="text-[10px] font-bold bg-gray-200 text-black px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
+                                            )}
+                                            <button onClick={() => setActiveInfoPopup('alerts')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
+                                                <Info size={16} color="#1C1C1E" />
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-col mt-auto pt-1 gap-0.5">
+                                            <p className="text-[12px] font-black uppercase tracking-wider m-0" style={{ color: "var(--text-primary)" }}>Alerts</p>
+                                            <p className="text-[26px] leading-[1.1] font-black m-0 tracking-tight" style={{ color: waterAnalytics.alerts.activeCount > 0 ? '#FF3B30' : '#1C1C1E' }}>
+                                                {waterAnalytics.alerts.activeCount} <span className="text-[13px] font-bold" style={{ color: "var(--text-primary)" }}>Active</span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {showDeviceHealthParam && (
+                                    <div className="apple-glass-card text-left rounded-2xl p-5 flex flex-col justify-between w-full min-h-[160px] max-h-[45vh]" style={{ background: "var(--card-bg)", border: '1px solid var(--card-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', position: 'relative' }}>
+                                        <div className="flex justify-between items-center w-full">
+                                            <div className="flex items-center justify-center rounded-xl w-8 h-8" style={{ background: 'rgba(10,132,255,0.15)' }}>
+                                                <Wifi size={18} color="#0A84FF" />
+                                            </div>
+                                            {user?.role === 'superadmin' && customerConfig.showDeviceHealth === false && (
+                                                <span className="text-[10px] font-bold bg-gray-200 text-black px-2 py-0.5 rounded-full uppercase">Hidden from Customer</span>
+                                            )}
+                                            <button onClick={() => setActiveInfoPopup('deviceHealth')} className="bg-transparent border-none p-1 cursor-pointer transition-colors hover:bg-black/5 rounded-full flex items-center justify-center">
+                                                <Info size={16} color="#1C1C1E" />
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-col mt-auto pt-1 gap-0.5">
+                                            <p className="text-[12px] font-black uppercase tracking-wider m-0" style={{ color: "var(--text-primary)" }}>Device Health</p>
+                                            <p className={`leading-[1.1] font-black m-0 tracking-tight ${waterAnalytics.deviceHealth.status === 'Healthy' ? 'text-[26px]' : 'text-[18px]'
+                                                }`} style={{ color: waterAnalytics.deviceHealth.status === 'Healthy' ? '#34C759' : waterAnalytics.deviceHealth.status === 'Warning' ? '#FF9500' : '#FF3B30' }}>
+                                                {waterAnalytics.deviceHealth.status}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
 
 
 
                             {/* COMBINED HISTORY CHART */}
 
-                            <div className="apple-glass-card flex flex-col items-stretch justify-between relative overflow-hidden flex-grow" style={{
+                        <div className="apple-glass-card flex flex-col items-stretch justify-between relative overflow-hidden flex-grow" style={{
+                            background: "var(--card-bg)",
+                            backdropFilter: "var(--card-blur)",
+                            WebkitBackdropFilter: "var(--card-blur)",
+                            borderRadius: '2.5rem',
+                            border: '1px solid var(--card-border)',
+                            boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+                            padding: '24px',
+                            minHeight: '350px'
+                        }}>
+                                <div className="flex items-start justify-between flex-wrap gap-4 mb-8">
+                                    <h2 className="text-[20px] font-bold text-[var(--text-primary)] tracking-tight m-0 leading-tight">TANK LEVEL AND VOLUME</h2>
+                                    
+                                    <div className="flex flex-col items-end gap-2.5">
+                                        <div className="flex items-center gap-3">
+                                            {/* Time Range Pills */}
+                                            <div className="flex p-1 rounded-full border relative overflow-hidden shrink-0 shadow-inner" style={{ background: 'var(--bg-primary)', borderColor: 'var(--card-border)' }}>
+                                                {['24H', '1W', '1M', 'RANGE'].map((r) => {
+                                                    const active = tankChartRange === r;
+                                                    return (
+                                                        <button
+                                                            key={r}
+                                                            onClick={() => setTankChartRange(r as any)}
+                                                            className={`relative z-10 px-4 py-1.5 text-[10px] font-extrabold tracking-widest uppercase rounded-full cursor-pointer transition-all duration-300 ${
+                                                                active ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                                                            }`}
+                                                            style={{
+                                                                border: 'none',
+                                                                background: active ? '#004F94' : 'transparent',
+                                                                boxShadow: active ? '0 4px 12px rgba(0, 79, 148, 0.25)' : 'none'
+                                                            }}
+                                                        >
+                                                            {r}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
 
-                                background: 'rgba(255, 255, 255, 0.25)',
+                                            {tankChartRange === 'RANGE' && (
+                                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                                                    <input 
+                                                        type="date" 
+                                                        value={rangeStart}
+                                                        onChange={(e) => setRangeStart(e.target.value)}
+                                                        className="border rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-[var(--text-primary)] focus:ring-1 focus:ring-blue-500 outline-none"
+                                                        style={{ background: 'var(--bg-primary)', borderColor: 'var(--card-border)' }}
+                                                    />
+                                                    <span className="text-[10px] text-[var(--text-muted)] font-bold">TO</span>
+                                                    <input 
+                                                        type="date" 
+                                                        value={rangeEnd}
+                                                        onChange={(e) => setRangeEnd(e.target.value)}
+                                                        className="border rounded-lg px-2.5 py-1.5 text-[10px] font-bold text-[var(--text-primary)] focus:ring-1 focus:ring-blue-500 outline-none"
+                                                        style={{ background: 'var(--bg-primary)', borderColor: 'var(--card-border)' }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
 
-                                backdropFilter: 'blur(20px)',
+                                        {/* Chart Legend - Positioned below filters */}
+                                        <div className="flex items-center gap-5 mr-1">
+                                            <button
+                                                onClick={() => setShowTankLevel(!showTankLevel)}
+                                                className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity bg-transparent border-none p-0"
+                                                style={{ opacity: showTankLevel ? 1 : 0.3 }}
+                                            >
+                                                <div className="w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm" style={{ background: '#0A84FF' }} />
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-primary)]">TANK LEVEL (%)</span>
+                                            </button>
 
-                                WebkitBackdropFilter: 'blur(20px)',
-
-                                borderRadius: '16px',
-
-                                border: '1px solid rgba(255,255,255,0.35)',
-
-                                boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
-
-                                padding: '24px',
-
-                                minHeight: '350px'
-                            }}>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h4 className="m-0" style={{ fontSize: '18px', fontWeight: 600, color: 'rgba(0,0,0,0.75)' }}>
-                                            TANK LEVEL AND VOLUME
-                                        </h4>
-
+                                            <button
+                                                onClick={() => setShowVolume(!showVolume)}
+                                                className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity bg-transparent border-none p-0"
+                                                style={{ opacity: showVolume ? 1 : 0.3 }}
+                                            >
+                                                <div className="w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm" style={{ background: '#FF9500' }} />
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-primary)]">VOLUME</span>
+                                            </button>
+                                        </div>
                                     </div>
-
-                                    <div className="flex items-center gap-4">
-
-                                        <button
-
-                                            onClick={() => setShowTankLevel(!showTankLevel)}
-
-                                            className="flex items-center gap-1.5 cursor-pointer hover:opacity-70 transition-opacity"
-
-                                            style={{ opacity: showTankLevel ? 1 : 0.3 }}
-
-                                        >
-
-                                            <div className="w-2 h-2 rounded-full" style={{ background: '#0A84FF' }} />
-
-                                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(0,0,0,0.5)' }}>Tank Level (%)</span>
-
-                                        </button>
-
-                                        <button
-
-                                            onClick={() => setShowVolume(!showVolume)}
-
-                                            className="flex items-center gap-1.5 cursor-pointer hover:opacity-70 transition-opacity"
-
-                                            style={{ opacity: showVolume ? 1 : 0.3 }}
-
-                                        >
-
-                                            <div className="w-2 h-2 rounded-full" style={{ background: '#FF9500' }} />
-
-                                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(0,0,0,0.5)' }}>Volume</span>
-
-                                        </button>
-
-                                    </div>
-
                                 </div>
 
 
@@ -1721,7 +1838,7 @@ const EvaraTankAnalytics = () => {
 
                                         <ResponsiveContainer width="100%" height="100%">
 
-                                            <AreaChart data={chartDataForDisplay.slice(-50)} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                            <AreaChart data={chartDataForDisplay} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
 
                                                 <defs>
 
@@ -1743,9 +1860,29 @@ const EvaraTankAnalytics = () => {
 
                                                 </defs>
 
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--card-border)" />
 
-                                                <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#8E8E93' }} />
+                                                <XAxis 
+                                                    dataKey="timestamp" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fontSize: 10, fill: 'var(--text-muted)', fontWeight: 500 }}
+                                                    interval="preserveStartEnd"
+                                                    minTickGap={80}
+                                                    tickFormatter={(value) => {
+                                                        const date = new Date(value);
+                                                        if (tankChartRange === '24H') {
+                                                            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                                                        } else if (tankChartRange === '1W') {
+                                                            return date.toLocaleDateString([], { weekday: 'short' }); 
+                                                        } else if (tankChartRange === '1M') {
+                                                            const weekNum = Math.ceil(date.getDate() / 7);
+                                                            return `Week ${weekNum}`;
+                                                        } else {
+                                                            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                                                        }
+                                                    }}
+                                                />
 
 
 
@@ -1785,8 +1922,8 @@ const EvaraTankAnalytics = () => {
                                                             } catch (_) { }
                                                         }
                                                         return (
-                                                            <div style={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', background: '#fff', padding: '10px 14px', minWidth: 160 }}>
-                                                                <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13, color: '#1C1C1E' }}>{dateStr} &nbsp; {timeStr}</p>
+                                                            <div style={{ borderRadius: '12px', border: '1px solid var(--card-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', background: 'var(--bg-secondary)', padding: '10px 14px', minWidth: 160 }}>
+                                                                <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{dateStr} &nbsp; {timeStr}</p>
                                                                 {payload.map((entry: any, i: number) => (
                                                                     <p key={i} style={{ margin: '4px 0 0', fontSize: 13, color: entry.color, fontWeight: 600 }}>
                                                                         {entry.name === 'Tank Level (%)' ? `Tank Level (%) : ${entry.value?.toFixed(2)}%` : `Volume : ${entry.value?.toFixed(2)} L`}
@@ -1810,77 +1947,7 @@ const EvaraTankAnalytics = () => {
 
                         </div>
 
-                        {/* TODAY'S EVENT TIMELINE - Full Width Bottom Card */}
-                        <div className="lg:col-span-3 apple-glass-card p-8 mt-4 rounded-[2.5rem]" style={{
-                            background: 'rgba(255, 255, 255, 0.15)',
-                            border: '1px solid rgba(255,255,255,0.3)',
-                            boxShadow: '0 10px 40px rgba(0,0,0,0.06)',
-                            width: '100%'
-                        }}>
-                            <div className="flex justify-between items-center mb-0">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(10,132,255,0.1)' }}>
-                                        <Activity size={22} color="#0A84FF" />
-                                    </div>
-                                    <div>
-                                        <h4 className="m-0 text-base font-bold uppercase tracking-widest" style={{ color: 'rgba(0,0,0,0.7)' }}>Today's Event Timeline</h4>
-                                        <p className="text-[10px] font-bold text-slate-400 m-0 mt-0.5">DETAILED LOG OF SYSTEM ACTIVITY</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/5 text-[11px] font-black text-slate-500">
-                                    <Clock size={14} />
-                                    <span>LIVE 24H TRACKING</span>
-                                </div>
-                            </div>
 
-                            <div className="relative h-48 flex items-center px-8 pb-4">
-                                {/* The Scale Line - DARKENED */}
-                                <div className="absolute left-8 right-8 h-[2.5px] bg-black/30 rounded-full top-[35%] -translate-y-1/2" />
-
-                                {/* Scale Ticks (Every 5 units) - DARKENED */}
-                                <div className="absolute left-8 right-8 flex justify-between top-[35%] -translate-y-1/2 px-0 w-[calc(100%-64px)] pointer-events-none">
-                                    {Array.from({ length: 21 }).map((_, i) => (
-                                        <div key={i} style={{
-                                            width: i % 5 === 0 ? '2.5px' : '1px',
-                                            height: i % 5 === 0 ? '14px' : '8px',
-                                            background: 'rgba(0,0,0,0.5)',
-                                            marginTop: i % 5 === 0 ? '-1px' : '0px'
-                                        }} />
-                                    ))}
-                                </div>
-
-                                <div className="relative flex flex-col justify-center w-full" style={{ marginTop: '-30px' }}>
-                                    <div className="relative flex justify-between w-full" style={{ top: '24px' }}>
-                                        {[
-                                            { time: '08:15 AM', label: 'Refill Start', icon: TrendingUp, color: '#34C759', pos: '10%', desc: 'Refill detected' },
-                                            { time: '09:45 AM', label: 'Complete', icon: Activity, color: '#0A84FF', pos: '25%', desc: 'Tank at 95%' },
-                                            { time: '12:30 PM', label: 'Peak Use', icon: Activity, color: '#FF3B30', pos: '45%', desc: 'High usage' },
-                                            { time: '03:45 PM', label: 'Stabilized', icon: Activity, color: '#0A84FF', pos: '65%', desc: 'No flow' },
-                                            { time: '06:20 PM', label: 'Evening Use', icon: Activity, color: '#FF9500', pos: '80%', desc: 'Normal usage' },
-                                            { time: '08:50 PM', label: 'Top-up Start', icon: TrendingUp, color: '#34C759', pos: '95%', desc: 'Auto refill' }
-                                        ].map((event, idx) => (
-                                            <div key={idx} className="absolute flex flex-col items-center group cursor-pointer" style={{ left: event.pos, transform: 'translateX(-50%)' }}>
-                                                {/* Point on the line */}
-                                                <div className="w-5 h-5 rounded-full border-[3px] border-white shadow-lg mb-1 transition-all group-hover:scale-125 z-10" style={{ background: event.color }} />
-
-                                                {/* Event Card */}
-                                                <div className="apple-glass-card p-2 px-4 rounded-2xl flex flex-col items-center gap-0.5 shadow-xl opacity-90 group-hover:opacity-100 transition-all group-hover:-translate-y-1 border"
-                                                    style={{
-                                                        background: 'rgba(255, 255, 255, 0.98)',
-                                                        minWidth: '94px',
-                                                        borderColor: `${event.color}40`,
-                                                        marginTop: '4px'
-                                                    }}>
-                                                    <span className="text-[12px] font-black leading-none" style={{ color: event.color }}>{event.time}</span>
-                                                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight text-center">{event.label}</span>
-                                                    <span className="text-[8px] font-medium text-slate-400 mt-0.5 uppercase">{event.desc}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     {/* Subtle Loading Indicators — Matches Home Map */}
@@ -1901,7 +1968,7 @@ const EvaraTankAnalytics = () => {
                     onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
                     <div className="rounded-3xl p-8 flex flex-col w-full max-w-sm text-center"
                         style={{
-                            background: 'white',
+                            background: "var(--bg-secondary)", border: '1px solid var(--card-border)',
                             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
                         }}
                         onClick={e => e.stopPropagation()}>
@@ -1910,8 +1977,8 @@ const EvaraTankAnalytics = () => {
                             <span className="material-icons" style={{ fontSize: '32px' }}>delete_outline</span>
                         </div>
 
-                        <h3 className="text-xl font-bold mb-2 text-gray-900">Delete this Node?</h3>
-                        <p className="text-sm text-gray-500 mb-8">
+                        <h3 className="text-xl font-bold mb-2 text-[var(--text-primary)]">Delete this Node?</h3>
+                        <p className="text-sm text-[var(--text-muted)] mb-8">
                             This will permanently remove <strong>{deviceName}</strong> and all its historical telemetry data. This action cannot be undone.
                         </p>
 
@@ -1919,14 +1986,14 @@ const EvaraTankAnalytics = () => {
                             <button
                                 onClick={handleDelete}
                                 disabled={isDeleting}
-                                className={`w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider transition-all ${isDeleting ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200 active:scale-95'}`}
+                                className={`w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider transition-all ${isDeleting ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200 active:scale-95'}`}
                             >
                                 {isDeleting ? 'Deleting...' : 'Yes, Delete Node'}
                             </button>
                             <button
                                 onClick={() => setShowDeleteConfirm(false)}
                                 disabled={isDeleting}
-                                className="w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
+                                className="w-full py-3 rounded-2xl text-sm font-bold uppercase tracking-wider text-[var(--text-muted)] hover:bg-gray-800 transition-all active:scale-95"
                             >
                                 Cancel
                             </button>

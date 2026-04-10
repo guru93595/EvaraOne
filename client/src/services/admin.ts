@@ -10,6 +10,28 @@ export interface AdminStats {
   system_health: number;
 }
 
+export interface AlertRule {
+  id: string;
+  name: string;
+  node_id: string;
+  metric: string;
+  condition: ">" | "<" | "==";
+  threshold: number;
+  enabled: boolean;
+}
+
+export interface AlertHistory {
+  id: string;
+  rule_id: string;
+  value_at_time: number;
+  triggered_at: string;
+  rule: AlertRule;
+}
+
+export interface Profile extends Customer {
+  id: string;
+}
+
 class AdminService {
   private static instance: AdminService;
 
@@ -131,6 +153,29 @@ class AdminService {
   }
 
   /**
+   * Alert Management
+   */
+  async getAlertRules(): Promise<AlertRule[]> {
+    const response = await api.get("/admin/alerts/rules");
+    return response.data;
+  }
+
+  async getActiveAlerts(): Promise<AlertHistory[]> {
+    const response = await api.get("/admin/alerts/active");
+    return response.data;
+  }
+
+  async createAlertRule(rule: Omit<AlertRule, "id">): Promise<AlertRule> {
+    const response = await api.post("/admin/alerts/rules", rule);
+    return response.data;
+  }
+
+  async deleteAlertRule(id: string): Promise<any> {
+    const response = await api.delete(`/admin/alerts/rules/${id}`);
+    return response.data;
+  }
+
+  /**
    * Get customers.
    */
   async getCustomers(communityId?: string, zoneId?: string): Promise<Customer[]> {
@@ -152,6 +197,14 @@ class AdminService {
    */
   async createCustomer(customerData: any): Promise<Customer> {
     const response = await api.post("/admin/customers", customerData);
+    return response.data;
+  }
+
+  /**
+   * Update Profile/User Role
+   */
+  async updateProfileRole(id: string, role: string): Promise<any> {
+    const response = await api.patch(`/admin/profiles/${id}/role`, { role });
     return response.data;
   }
 

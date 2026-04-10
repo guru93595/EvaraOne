@@ -20,23 +20,23 @@ import ErrorBoundary from "../components/ErrorBoundary";
 const SystemHealthCard = ({ systemStatus, healthPct }: { systemStatus: string; healthPct: number }) => (
   <div className="apple-glass-card px-[20px] py-[16px] rounded-[20px] h-full flex flex-col justify-between">
     <div className="flex justify-between items-start">
-      <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em]">System Health</span>
-      <div className="w-6 h-6 rounded-full bg-blue-50/50 flex items-center justify-center border border-blue-100/20">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3A7AFE" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <span className="text-[12px] font-[800] text-[var(--text-muted)] uppercase tracking-[0.1em]">System Health</span>
+      <div className="w-8 h-8 rounded-full bg-blue-500/10 dark:bg-blue-400/15 flex items-center justify-center border border-blue-500/20 dark:border-blue-400/20 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="icon-health-adaptive">
           <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
         </svg>
       </div>
     </div>
     <div className="flex items-baseline gap-2">
-      <h2 className="text-[36px] font-[800] text-[#1F2937] leading-none tracking-tight">{healthPct}</h2>
-      <span className="text-[20px] font-[800] text-gray-400 leading-none">%</span>
+      <h2 className="text-[36px] font-[800] text-[var(--text-primary)] leading-none tracking-tight">{healthPct}</h2>
+      <span className="text-[20px] font-[800] text-[var(--text-muted)] leading-none">%</span>
     </div>
     <div className="flex items-center gap-1.5">
       <span className={clsx(
         "w-2 h-2 rounded-full",
         systemStatus === "Optimal" ? "bg-[#16A34A] shadow-[0_0_8px_rgba(22,163,74,0.4)]" : "bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.4)]"
       )} />
-      <span className="text-[10px] font-[800] text-gray-500 uppercase tracking-tight">
+      <span className="text-[10px] font-[800] text-[var(--text-muted)] uppercase tracking-tight">
         {systemStatus === "Optimal" ? "Active" : "Attention Required"}
       </span>
     </div>
@@ -60,7 +60,7 @@ const LevelTrendChart = ({ nodes }: { nodes: any[] }) => {
 
   return (
     <div className="apple-glass-card p-[20px] rounded-[20px] h-full flex flex-col">
-      <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-4 shrink-0">Level Trend (24H)</span>
+      <span className="text-[12px] font-[800] text-[var(--text-muted)] uppercase tracking-[0.1em] mb-4 shrink-0">Level Trend (24H)</span>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="10%">
@@ -68,11 +68,20 @@ const LevelTrendChart = ({ nodes }: { nodes: any[] }) => {
               dataKey="time"
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 9, fontWeight: 700, fill: "#9ca3af" }}
+              tick={{ fontSize: 9, fontWeight: 700, fill: "var(--text-muted)" }}
               interval="preserveStartEnd"
             />
             <Tooltip
-              contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", fontSize: 11 }}
+              contentStyle={{
+                borderRadius: "12px",
+                border: "1px solid var(--card-border)",
+                background: "var(--card-bg)",
+                backdropFilter: "var(--card-blur)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                fontSize: 11,
+                color: "var(--text-primary)"
+              }}
+              itemStyle={{ color: "var(--text-primary)" }}
               formatter={(v: any) => [`${Math.round(v)}%`, "Level"]}
             />
             <Bar dataKey="level" radius={[8, 8, 0, 0]}
@@ -100,7 +109,7 @@ const UsagePeakChart = ({ nodes }: { nodes: any[] }) => {
 
   return (
     <div className="apple-glass-card p-[20px] rounded-[20px] h-full flex flex-col">
-      <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em] mb-4 shrink-0">Usage Peak (Weekly)</span>
+      <span className="text-[12px] font-[800] text-[var(--text-muted)] uppercase tracking-[0.1em] mb-4 shrink-0">Usage Peak (Weekly)</span>
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barCategoryGap="10%">
@@ -108,11 +117,20 @@ const UsagePeakChart = ({ nodes }: { nodes: any[] }) => {
               dataKey="day"
               axisLine={false}
               tickLine={false}
-              tick={{ fontSize: 9, fontWeight: 700, fill: "#9ca3af" }}
+              tick={{ fontSize: 9, fontWeight: 700, fill: "var(--text-muted)" }}
               interval="preserveStartEnd"
             />
             <Tooltip
-              contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", fontSize: 11 }}
+              contentStyle={{
+                borderRadius: "12px",
+                border: "1px solid var(--card-border)",
+                background: "var(--card-bg)",
+                backdropFilter: "var(--card-blur)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                fontSize: 11,
+                color: "var(--text-primary)"
+              }}
+              itemStyle={{ color: "var(--text-primary)" }}
               formatter={(v: any) => [`${Math.round(v)}%`, "Usage"]}
             />
             <Bar dataKey="usage" radius={[8, 8, 0, 0]}
@@ -212,22 +230,15 @@ function Dashboard() {
 
   return (
     <div className="w-full min-h-screen flex flex-col bg-transparent relative pt-[85px] lg:pt-[95px] pb-6">
-      {/* Subtle noise texture */}
-      <div
-        className="absolute inset-0 opacity-[0.015] pointer-events-none z-0"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        }}
-      />
 
       {/* ── Top Header Bar ── */}
       <div className="px-4 lg:px-6 pt-3 pb-2 relative z-10">
         <header className="max-w-screen-2xl mx-auto flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-[28px] font-[800] tracking-tight text-[#004ba0] leading-none mb-1.5">
+            <h1 className="text-[28px] font-[800] tracking-tight text-[var(--dashboard-heading)] leading-none mb-1.5">
               System Dashboard
             </h1>
-            <p className="text-[11px] text-blue-500 font-bold uppercase tracking-[0.15em] opacity-80 mb-0">
+            <p className="text-[11px] text-[var(--text-muted)] font-bold uppercase tracking-[0.15em] opacity-80 mb-0">
               Real-Time Network Intelligence
             </p>
           </div>
@@ -250,7 +261,7 @@ function Dashboard() {
         />
         <SystemHealthCard systemStatus={systemStatus} healthPct={healthPct} />
         {/* Map */}
-        <div className="min-h-[140px] relative group rounded-[20px] overflow-hidden border border-white/40 shadow-sm">
+        <div className="apple-glass-card min-h-[140px] relative group rounded-[20px] overflow-hidden">
           <SharedMap
             devices={mapDevices as any}
             pipelines={[]}
@@ -261,7 +272,7 @@ function Dashboard() {
           <div className="absolute top-3 right-3 z-[500]">
             <Link
               to="/map"
-              className="px-4 py-1.5 rounded-[16px] bg-white text-[10px] font-[800] text-blue-600 shadow-xl border border-white flex items-center gap-1.5 transition-all opacity-0 group-hover:opacity-100 uppercase tracking-widest"
+              className="px-4 py-1.5 rounded-[16px] bg-white dark:bg-white/10 text-[10px] font-[800] text-blue-600 dark:text-white shadow-xl border border-white dark:border-white/20 flex items-center gap-1.5 transition-all opacity-0 group-hover:opacity-100 uppercase tracking-widest"
             >
               Expand <ArrowUpRight size={12} />
             </Link>

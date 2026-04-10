@@ -97,7 +97,7 @@ const FieldRow = ({
           id={selectId}
           value={value}
           onChange={(e) => onSelect(index, e.target.value)}
-          className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm font-medium text-slate-700 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 hover:border-slate-300"
+          className="w-full appearance-none rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 pr-10 text-sm font-medium text-slate-700 dark:text-slate-300 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 hover:border-slate-300 dark:hover:border-slate-500"
         >
           <option value="">— Select a field —</option>
           {fields.map((f) => {
@@ -111,7 +111,7 @@ const FieldRow = ({
         </select>
         <ChevronDown
           size={16}
-          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
         />
       </div>
 
@@ -143,13 +143,13 @@ interface FormInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 const FormInput = ({ label, error, hint, id, ...props }: FormInputProps) => (
   <div className="flex flex-col gap-1.5">
-    <label htmlFor={id} className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+    <label htmlFor={id} className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
       {label}
     </label>
     <input
       id={id}
       {...props}
-      className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-all placeholder:text-slate-300
+      className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium text-slate-800 dark:text-white shadow-sm transition-all placeholder:text-slate-300 dark:placeholder:text-slate-500
         focus:outline-none focus:ring-2 focus:ring-blue-500/40
         ${error
           ? 'border-red-400 bg-red-50/30 focus:border-red-400'
@@ -157,7 +157,7 @@ const FormInput = ({ label, error, hint, id, ...props }: FormInputProps) => (
         }
         disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed`}
     />
-    {hint && !error && <p className="text-[11px] text-slate-400">{hint}</p>}
+    {hint && !error && <p className="text-[11px] text-slate-400 dark:text-slate-500">{hint}</p>}
     {error && (
       <p className="flex items-center gap-1 text-[11px] text-red-500 font-medium">
         <AlertCircle size={11} />
@@ -339,10 +339,10 @@ export default function ThingSpeakNodeProvisioner({
                 <Wifi size={20} className="text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-black text-slate-900 leading-tight">
+                <h1 className="text-lg font-black text-slate-900 dark:text-white leading-tight">
                   ThingSpeak Node
                 </h1>
-                <p className="text-[11px] font-medium text-slate-400">
+                <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
                   Provision a new IoT data channel
                 </p>
               </div>
@@ -457,7 +457,7 @@ export default function ThingSpeakNodeProvisioner({
 
               {!hasFetchedFields && (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-center">
-                  <p className="text-xs font-medium text-slate-400">
+                  <p className="text-xs font-medium text-slate-400 dark:text-slate-500">
                     Fetch fields above to configure data mappings.
                   </p>
                 </div>
@@ -527,7 +527,7 @@ export default function ThingSpeakNodeProvisioner({
         </div>
 
         {/* Footer hint */}
-        <p className="mt-4 text-center text-[11px] text-slate-400 font-medium">
+        <p className="mt-4 text-center text-[11px] text-slate-400 dark:text-slate-500 font-medium">
           Data is fetched directly from ThingSpeak. No proxy required.
         </p>
       </form>

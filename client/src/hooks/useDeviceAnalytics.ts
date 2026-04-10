@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { deviceService } from "../services/DeviceService";
@@ -40,12 +40,21 @@ export interface AnalyticsData {
       trends24h: any[];
       dailyConsumption: any[];
     };
+    tankBehavior?: any;
+    active_fields?: string[];
   };
   refetch: () => void;
   isError: boolean;
 }
 
-export const useDeviceAnalytics = (hardwareIdOverride?: string, options: { refetchInterval?: number | false } = {}): AnalyticsData => {
+export const useDeviceAnalytics = (
+  hardwareIdOverride?: string, 
+  options: { 
+    refetchInterval?: number | false; 
+    staleTime?: number;
+    filter?: { range?: string; startDate?: string; endDate?: string };
+  } = {}
+): AnalyticsData => {
   const { hardwareId: routeHardwareId } = useParams<{ hardwareId: string }>();
   const hardwareId = hardwareIdOverride || routeHardwareId || '';
 
@@ -63,8 +72,8 @@ export const useDeviceAnalytics = (hardwareIdOverride?: string, options: { refet
       return await deviceService.getNodeDetails(hardwareId);
     },
     enabled: !!hardwareId,
-    staleTime: 1000 * 30, // 30 seconds for consistent freshness
-    refetchInterval: options.refetchInterval,
+    staleTime: options.staleTime ?? (1000 * 30), // Allow override, default 30 seconds for consistent freshness
+    refetchInterval: options.refetchInterval ?? false, // Disable auto-refetch by default
   });
 
   const {
@@ -75,14 +84,14 @@ export const useDeviceAnalytics = (hardwareIdOverride?: string, options: { refet
     refetch: refetchTelemetry,
     isError: isTelemetryError,
   } = useQuery({
-    queryKey: ["telemetry_backend", hardwareId],
+    queryKey: ["telemetry_backend", hardwareId, options.filter],
     queryFn: async () => {
       if (!hardwareId) return null;
-      return await deviceService.getNodeAnalytics(hardwareId);
+      return await deviceService.getNodeAnalytics(hardwareId, options.filter);
     },
     enabled: !!hardwareId,
-    staleTime: 1000 * 30, // 30 seconds for consistent freshness
-    refetchInterval: options.refetchInterval,
+    staleTime: 0, // Force fresh data when filter changes
+    refetchInterval: options.refetchInterval ?? false, // Disable auto-refetch by default
   });
 
   const { telemetry: realtimeData } = useRealtimeTelemetry(device?.id || hardwareId);
@@ -91,6 +100,12 @@ export const useDeviceAnalytics = (hardwareIdOverride?: string, options: { refet
   const isLoading = deviceLoading || telemetryLoading;
   const isError = isDeviceError || isTelemetryError;
   const error = (deviceError as any)?.message || (telemetryError as any)?.message || null;
+
+  // Use useCallback to ensure refetch function reference stays stable
+  const refetch = useCallback(() => {
+    refetchDevice();
+    refetchTelemetry();
+  }, [refetchDevice, refetchTelemetry]);
 
   const unifiedData = useMemo(() => {
     if (!device) return undefined;
@@ -220,9 +235,6 @@ export const useDeviceAnalytics = (hardwareIdOverride?: string, options: { refet
     error,
     data: unifiedData,
     history: telemetryResult?.history || [],
-    refetch: () => {
-      refetchDevice();
-      refetchTelemetry();
-    }
+    refetch
   };
 };

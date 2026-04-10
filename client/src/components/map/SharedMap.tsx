@@ -136,14 +136,14 @@ const MiniTelemetryViz = ({ device, snap, firestoreFlow }: { device: MapDevice; 
             style={{
               fontSize: "10px",
               fontWeight: 800,
-              color: "#64748b",
+              color: "var(--text-muted)",
               textTransform: "uppercase",
               letterSpacing: "0.08em",
             }}
           >
             {isSyncing ? "Syncing Level..." : "Water Level"}
           </span>
-          <span style={{ fontSize: "14px", fontWeight: 900, color: "#1e293b", fontFamily: "Outfit, sans-serif" }}>
+          <span style={{ fontSize: "14px", fontWeight: 900, color: "var(--text-primary)", fontFamily: "Outfit, sans-serif" }}>
             {pct.toFixed(1)}%
           </span>
         </div>
@@ -197,14 +197,14 @@ const MiniTelemetryViz = ({ device, snap, firestoreFlow }: { device: MapDevice; 
             style={{
               fontSize: "10px",
               fontWeight: 700,
-              color: "#64748b",
+              color: "var(--text-muted)",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
             }}
           >
             Depth
           </span>
-          <span style={{ fontSize: "13px", fontWeight: 800, color: "#1e293b" }}>
+          <span style={{ fontSize: "13px", fontWeight: 800, color: "var(--text-primary)" }}>
             {depth.toFixed(1)} m
           </span>
         </div>
@@ -376,12 +376,12 @@ const DeviceHoverPanel = ({
         top: cy,
         width: panelW,
         zIndex: 9999,
-        background: "rgba(255,255,255,0.22)",
-        backdropFilter: "saturate(200%) blur(40px)",
-        WebkitBackdropFilter: "saturate(200%) blur(40px)",
-        border: "1px solid rgba(255,255,255,0.6)",
+        background: "var(--card-bg)",
+        backdropFilter: "var(--card-blur) saturate(200%)",
+        WebkitBackdropFilter: "var(--card-blur) saturate(200%)",
+        border: "1px solid var(--card-border)",
         borderRadius: "28px",
-        boxShadow: "0 20px 50px rgba(0,0,0,0.15), inset 0 1px 0 0 rgba(255,255,255,0.8)",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.15), inset 0 1px 0 0 rgba(255,255,255,0.05)",
         padding: "18px 20px",
         pointerEvents: "none",
         animation: "hoverFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
@@ -403,7 +403,7 @@ const DeviceHoverPanel = ({
               margin: 0,
               fontSize: "16px",
               fontWeight: 900,
-              color: "#0f172a",
+              color: "var(--text-primary)",
               letterSpacing: "-0.02em",
               lineHeight: 1.1,
               overflow: "hidden",
@@ -417,7 +417,7 @@ const DeviceHoverPanel = ({
             style={{
               margin: "4px 0 0",
               fontSize: "11px",
-              color: "#64748b",
+               color: "var(--text-muted)",
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.05em",
@@ -451,11 +451,11 @@ const DeviceHoverPanel = ({
           />
           <span
             style={{
-              fontSize: "9px",
+               fontSize: "9px",
               fontWeight: 900,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: isOnline ? "#16a34a" : "#475569",
+              color: isOnline ? "#16a34a" : "var(--text-muted)",
             }}
           >
             {computedStatus.toUpperCase()}
@@ -519,8 +519,18 @@ const SharedMap = ({
   );
   const [hoverPanel, setHoverPanel] = useState<HoverPanel | null>(null);
   const [realtimeStatuses, setRealtimeStatuses] = useState<Record<string, "Online" | "Offline">>({});
+  const [theme, setTheme] = useState(document.documentElement.getAttribute('data-theme') || 'light');
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
+
+  // Watch for theme changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.documentElement.getAttribute('data-theme') || 'light');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   // SaaS Architecture: Real-time Marker Status Sync
   // Listen to BOTH room-based and global broadcast events
@@ -614,9 +624,20 @@ const SharedMap = ({
           scrollWheelZoom={true}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={theme === 'dark' ? '&copy; <a href="https://carto.com/attributions">CARTO</a>' : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
+            url={theme === 'dark' 
+              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+              : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            }
           />
+
+          <style>{`
+            ${theme === 'dark' ? `
+              .leaflet-tile-pane {
+                filter: brightness(1.3) contrast(0.9) saturate(0.8);
+              }
+            ` : ''}
+          `}</style>
 
           {filteredDevices.map((device) => {
             if (!device.latitude || !device.longitude) return null;

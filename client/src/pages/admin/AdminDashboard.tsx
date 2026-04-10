@@ -3,6 +3,7 @@ import { Users, Network, MapPin, Settings, Activity } from "lucide-react";
 import { useToast } from "../../components/ToastProvider";
 import { ActionCard } from "../../components/admin/ActionCard";
 import { Modal } from "../../components/ui/Modal";
+import { useAuth } from "../../context/AuthContext";
 
 import { AddCustomerForm } from "../../components/admin/forms/AddCustomerForm";
 import { AddDeviceForm } from "../../components/admin/forms/AddDeviceForm";
@@ -15,8 +16,10 @@ type ModalType = "zone" | "customer" | "device" | "config" | null;
 
 const AdminDashboard = () => {
   const { showToast } = useToast();
+  const { loading: authLoading, user } = useAuth();
   const [activeModal, setActiveModal] = useState<ModalType>(null);
-  const { data: stats, isLoading, refetch } = useDashboardSummary();
+  const { data: statsData, isLoading, refetch } = useDashboardSummary();
+  const stats = (statsData as any) || {};
 
   // Mapping backend response to frontend expectations
   const totalDevices = stats?.total_nodes || 0;
@@ -53,10 +56,38 @@ const AdminDashboard = () => {
     }
   };
 
-  if (isLoading && !stats) {
+  // Show loading state while authenticating or fetching dashboard data
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-slate-500">Verifying authorization...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading for initial data fetch (but allow interaction after first load)
+  if (isLoading && !stats?.total_nodes) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-slate-500">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Safety check: ensure user is authenticated and is superadmin
+  if (!user?.role || user.role !== 'superadmin') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-lg font-bold text-red-600">Access Denied</h2>
+          <p className="text-sm text-slate-500 mt-2">You don't have permission to access this page.</p>
+        </div>
       </div>
     );
   }
@@ -65,10 +96,10 @@ const AdminDashboard = () => {
     <div className="space-y-4">
       {/* ─── HEADER ─── */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+        <h2 className="text-2xl font-bold overview-heading tracking-tight">
           System Overview
         </h2>
-        <p className="text-slate-500 text-sm">
+        <p className="overview-subheading text-sm">
           Real-time infrastructure monitoring and management.
         </p>
       </div>
@@ -104,8 +135,8 @@ const AdminDashboard = () => {
       {/* ─── ACTION GRID ─── */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Activity size={18} className="text-blue-600" />
+          <h3 className="text-lg font-bold section-heading flex items-center gap-2">
+            <Activity size={18} className="section-heading-icon" />
             Quick Actions
           </h3>
         </div>

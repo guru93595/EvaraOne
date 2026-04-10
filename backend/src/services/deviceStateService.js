@@ -1,6 +1,11 @@
 const { db, admin } = require("../config/firebase.js");
 const cache = require("../config/cache.js");
 const { fetchChannelFeeds, getLatestFeed } = require("./thingspeakService.js");
+const {
+  analyzeWaterTank,
+  distanceToVolume,
+  distanceToPercentage,
+} = require("./waterAnalyticsEngine.js");
 
 const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -57,32 +62,80 @@ const calculateDeviceStatus = (lastUpdatedAt) => {
 };
 
 /**
+ * Load saved thresholds for a tank from Firestore cache
+ * Returns { lower, upper } or null
+ */
+const loadSavedThresholds = async (deviceId) => {
+  try {
+    const cacheKey = `thresholds:${deviceId}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) return cached;
+
+    // Try Firestore
+    const doc = await db.collection("tank_thresholds").doc(deviceId).get();
+    if (doc.exists) {
+      const data = doc.data();
+      const result = { lower: data.lower, upper: data.upper };
+      await cache.set(cacheKey, result, 86400); // 24h cache
+      return result;
+    }
+    return null;
+  } catch (err) {
+    console.error(`[DeviceState] loadSavedThresholds failed for ${deviceId}:`, err.message);
+    return null;
+  }
+};
+
+
+/**
+ * Save learned thresholds to Firestore for a tank
+ */
+const saveThresholds = async (deviceId, thresholds) => {
+  try {
+    await db.collection("tank_thresholds").doc(deviceId).set({
+      lower: thresholds.lower,
+      upper: thresholds.upper,
+      learnedAt: new Date().toISOString(),
+      readingCount: thresholds.readingCount,
+    });
+    // Bust the cache
+    await cache.del(`thresholds:${deviceId}`);
+    console.log(`[DeviceState] Saved thresholds for ${deviceId}: lower=${thresholds.lower}, upper=${thresholds.upper}`);
+  } catch (err) {
+    console.error(`[DeviceState] saveThresholds failed for ${deviceId}:`, err.message);
+  }
+};
+
+
+/**
  * Process ThingSpeak data and transform to standardized format
  */
-const processThingSpeakData = (device, feeds) => {
+const processThingSpeakData = async (device, feeds) => {
   if (!feeds || feeds.length === 0) return null;
-  
+
   const latestFeed = getLatestFeed(feeds);
   const lastUpdatedAt = latestFeed.created_at;
   const status = calculateDeviceStatus(lastUpdatedAt);
-  
-  // Find the correct field(s)
-  const isFlowMeter = device.type === 'flow_meter' || device.device_type === 'flow_meter';
-  
+
+  // ── FLOW METER path (unchanged) ──────────────────────────────────────
+  const typeNormalized = (device.type || device.device_type || "").toLowerCase();
+  const isFlowMeter = ["evaraflow", "flow", "flow_meter"].includes(typeNormalized);
   if (isFlowMeter) {
     const mapping = device.mapping || {};
     const flowKeys = ['flowField', 'flow_rate', 'flow_rate_field'];
     const totalKeys = ['volumeField', 'current_reading', 'total_reading', 'meter_reading_field'];
 
-    const fieldFlow = 
-        device.flow_rate_field || device.flowField || 
-        mapping.flowField || mapping.flow_rate_field || 
-        (latestFeed.field4 !== undefined ? "field4" : "field3");
+    const fieldFlow =
+      device.flow_rate_field || device.flowField ||
+      mapping.flowField || mapping.flow_rate_field ||
+      Object.keys(mapping).find(k => flowKeys.includes(mapping[k])) ||
+      (latestFeed.field4 !== undefined ? "field4" : "field3");
 
-    const fieldTotal = 
-        device.meter_reading_field || device.volumeField || 
-        mapping.volumeField || mapping.meter_reading_field || 
-        (latestFeed.field5 !== undefined ? "field5" : "field1");
+    const fieldTotal =
+      device.meter_reading_field || device.volumeField ||
+      mapping.volumeField || mapping.meter_reading_field ||
+      Object.keys(mapping).find(k => totalKeys.includes(mapping[k])) ||
+      (latestFeed.field5 !== undefined ? "field5" : "field1");
 
     const flow_rate = parseFloat(latestFeed[fieldFlow]) || 0;
     const total_liters = parseFloat(latestFeed[fieldTotal]) || 0;
@@ -93,34 +146,69 @@ const processThingSpeakData = (device, feeds) => {
       total_liters,
       lastUpdatedAt,
       status,
-      raw_data: latestFeed
+      raw_data: latestFeed,
     };
   }
 
-  // Tank logic (water level)
+  // ── TANK path — NEW: use analytics engine ──────────────────────────────
   const mapping = device.mapping || {};
-  const definedField = device.secondary_field || device.water_level_field || device.fieldKey || device.configuration?.water_level_field || device.configuration?.fieldKey;
-  const fieldKey = mapping.levelField || definedField || 
-      Object.keys(mapping).find(k => mapping[k] && mapping[k].includes("water_level")) ||
-      (latestFeed.field1 !== undefined ? "field1" : "field2");
-  
-  const rawDistance = parseFloat(latestFeed[fieldKey]) || 0;
-  const validDistance = Math.min(rawDistance / 100, device.depth);
-  const processedLevel = Math.max(0, device.depth - validDistance);
-  const percentage = device.depth > 0 
-    ? Math.min(100, (processedLevel / device.depth) * 100) 
-    : 0;
-  const volume = (device.capacity * percentage) / 100;
-  
+  const definedField =
+    device.secondary_field || device.water_level_field ||
+    device.fieldKey || device.configuration?.water_level_field ||
+    device.configuration?.fieldKey;
+  const fieldKey =
+    mapping.levelField || definedField ||
+    Object.keys(mapping).find(k => mapping[k] && mapping[k].includes("water_level")) ||
+    (latestFeed.field1 !== undefined ? "field1" : "field2");
+
+  // Build readings array for engine
+  const readings = feeds
+    .map(f => {
+      const distCm = parseFloat(f[fieldKey]);
+      const tsMs = new Date(f.created_at).getTime();
+      if (isNaN(distCm) || isNaN(tsMs)) return null;
+      return { distanceCm: distCm, timestampMs: tsMs };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.timestampMs - b.timestampMs);
+
+  if (readings.length === 0) return null;
+
+  const tankConfig = {
+    depthM: device.depth || device.configuration?.depth || device.configuration?.total_depth || 1.2,
+    capacityLitres: device.capacity || device.tank_size || 1000,
+  };
+
+  // Load saved thresholds (null = first run, will learn from data)
+  const savedThresholds = await loadSavedThresholds(device.id);
+
+  // Run engine
+  const analytics = analyzeWaterTank(readings, tankConfig, savedThresholds);
+
+  // Save thresholds if engine says we should re-learn
+  if (analytics.shouldSaveThresholds && analytics.thresholds.learned) {
+    await saveThresholds(device.id, analytics.thresholds);
+  }
+
   return {
     deviceId: device.id,
-    rawDistance,
-    processedLevel,
-    percentage,
-    volume,
+    rawDistance: analytics.currentDistanceCm,
+    processedLevel: analytics.currentDistanceCm,
+    percentage: analytics.currentPercentage,
+    volume: analytics.currentVolumeLitres,
     lastUpdatedAt,
     status,
-    raw_data: latestFeed
+    raw_data: latestFeed,
+
+    // NEW fields from analytics engine
+    waterState: analytics.state,                          // 'CONSUMPTION' | 'REFILL' | 'STABLE' | 'LEARNING'
+    rateLitresPerMin: analytics.rateLitresPerMin,         // L/min
+    consumedTodayLitres: analytics.consumedTodayLitres,   // L consumed today
+    refilledTodayLitres: analytics.refilledTodayLitres,   // L refilled today
+    estMinutesToEmpty: analytics.estMinutesToEmpty,       // minutes or null
+    estMinutesToFull: analytics.estMinutesToFull,         // minutes or null
+    thresholds: analytics.thresholds,                     // { lower, upper, learned }
+    deltaCm: analytics.deltaCm,                           // for debug
   };
 };
 
@@ -133,32 +221,41 @@ const updateFirestoreTelemetry = async (deviceType, deviceId, telemetryData, fee
       lastUpdatedAt: telemetryData.lastUpdatedAt,
       status: telemetryData.status,
       lastTelemetryFetch: new Date().toISOString(),
-      raw_data: telemetryData.raw_data
+      raw_data: telemetryData.raw_data,
     };
 
     if (telemetryData.rawDistance !== undefined) updatePayload.lastValue = telemetryData.rawDistance;
     if (telemetryData.processedLevel !== undefined) updatePayload.processedLevel = telemetryData.processedLevel;
-    if (telemetryData.percentage !== undefined) updatePayload.percentage = telemetryData.percentage;
+    if (telemetryData.percentage !== undefined) {
+      updatePayload.percentage = telemetryData.percentage;
+      updatePayload.level_percentage = telemetryData.percentage;
+    }
     if (telemetryData.flow_rate !== undefined) updatePayload.flow_rate = telemetryData.flow_rate;
     if (telemetryData.total_liters !== undefined) updatePayload.total_liters = telemetryData.total_liters;
-    
-    // DRIVER: Also populate telemetry_snapshot for frontend fallback consistency
+
+    // NEW: store analytics state in telemetry_snapshot
     updatePayload.telemetry_snapshot = {
       flow_rate: telemetryData.flow_rate || 0,
       total_liters: telemetryData.total_liters || 0,
       percentage: telemetryData.percentage || 0,
+      level_percentage: telemetryData.percentage || 0,
       timestamp: telemetryData.lastUpdatedAt,
-      status: telemetryData.status
+      status: telemetryData.status,
+      waterState: telemetryData.waterState || 'STABLE',
+      rateLitresPerMin: telemetryData.rateLitresPerMin || 0,
+      consumedTodayLitres: telemetryData.consumedTodayLitres || 0,
+      refilledTodayLitres: telemetryData.refilledTodayLitres || 0,
+      estMinutesToEmpty: telemetryData.estMinutesToEmpty || null,
+      estMinutesToFull: telemetryData.estMinutesToFull || null,
     };
-    
-    // Store telemetry history (last 20 readings)
+
     if (feeds && feeds.length > 0) {
       updatePayload.telemetryHistory = feeds.map((f) => ({
         created_at: f.created_at,
         raw: f
       }));
     }
-    
+
     await db.collection(deviceType.toLowerCase()).doc(deviceId).update(updatePayload);
   } catch (err) {
     console.error(`[DeviceState] Firestore update failed for ${deviceId}:`, err.message);
@@ -222,5 +319,7 @@ module.exports = {
   processThingSpeakData,
   updateFirestoreTelemetry,
   recalculateAllDevicesStatus,
-  OFFLINE_THRESHOLD_MS
+  loadSavedThresholds,
+  saveThresholds,
+  OFFLINE_THRESHOLD_MS,
 };

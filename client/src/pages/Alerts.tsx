@@ -76,31 +76,31 @@ export default function AlertsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
       {/* Active Alerts Section */}
-      <div className="apple-glass-card rounded-2xl shadow-sm border border-red-100 overflow-hidden">
-        <div className="p-6 bg-red-50 border-b border-red-100 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-red-700 flex items-center gap-2">
+      <div className="apple-glass-card rounded-2xl shadow-sm border border-red-500/20 overflow-hidden">
+        <div className="p-6 bg-red-500/10 border-b border-red-500/20 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-red-600 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5" /> Active Alerts
           </h2>
-          <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-1 rounded-full">
+          <span className="bg-red-500/20 text-red-600 text-xs font-bold px-2 py-1 rounded-full">
             {activeAlerts.length}
           </span>
         </div>
-        <div className="divide-y divide-red-50">
+        <div className="divide-y divide-red-500/10">
           {activeAlerts.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
+            <div className="p-8 text-center" style={{ color: 'var(--text-muted)' }}>
               No active alerts (Safe Condition)
             </div>
           ) : (
             activeAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className="p-4 flex items-center justify-between hover:bg-red-50/50 transition-colors"
+                className="p-4 flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
               >
                 <div>
-                  <h4 className="font-semibold text-slate-800">
+                  <h4 className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {alert.rule.name}
                   </h4>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                     Value:{" "}
                     <span className="font-mono font-bold text-red-600">
                       {alert.value_at_time}
@@ -112,7 +112,7 @@ export default function AlertsPage() {
                   <div className="text-xs font-bold text-red-500 uppercase tracking-wide">
                     Critical
                   </div>
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                     {new Date(alert.triggered_at).toLocaleTimeString()}
                   </div>
                 </div>
@@ -123,9 +123,9 @@ export default function AlertsPage() {
       </div>
 
       {/* Rules Management Section */}
-      <div>
+        <div>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-slate-800">Alert Rules</h2>
+          <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Alert Rules</h2>
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
@@ -135,20 +135,20 @@ export default function AlertsPage() {
         </div>
 
         {showForm && (
-          <div className="apple-glass-card p-6 rounded-xl border border-slate-200 shadow-sm mb-6 animate-in slide-in-from-top-4">
-            <h3 className="text-sm font-bold text-slate-500 uppercase mb-4">
+          <div className="apple-glass-card p-6 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm mb-6 animate-in slide-in-from-top-4">
+            <h3 className="text-sm font-bold uppercase mb-4" style={{ color: 'var(--text-muted)' }}>
               Define Notification Logic
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <input
                 placeholder="Rule Name (e.g. Tank 1 Low Level)"
-                className="p-2 border rounded-lg"
+                className="p-2 border rounded-lg bg-transparent border-slate-200 dark:border-white/20 text-[var(--text-primary)]"
                 onChange={(e) =>
                   setNewRule({ ...newRule, name: e.target.value })
                 }
               />
               <select
-                className="p-2 border rounded-lg"
+                className="p-2 border rounded-lg bg-transparent border-slate-200 dark:border-white/20 text-[var(--text-primary)]"
                 onChange={(e) =>
                   setNewRule({ ...newRule, node_id: e.target.value })
                 }
@@ -162,14 +162,14 @@ export default function AlertsPage() {
               </select>
               <input
                 placeholder="Metric key (e.g. level, temp)"
-                className="p-2 border rounded-lg"
+                className="p-2 border rounded-lg bg-transparent border-slate-200 dark:border-white/20 text-[var(--text-primary)]"
                 onChange={(e) =>
                   setNewRule({ ...newRule, metric: e.target.value })
                 }
               />
               <div className="flex gap-2">
                 <select
-                  className="p-2 border rounded-lg"
+                  className="p-2 border rounded-lg bg-transparent border-slate-200 dark:border-white/20 text-[var(--text-primary)]"
                   onChange={(e) =>
                     setNewRule({
                       ...newRule,
@@ -184,7 +184,7 @@ export default function AlertsPage() {
                 <input
                   type="number"
                   placeholder="Threshold"
-                  className="p-2 border rounded-lg w-full"
+                  className="p-2 border rounded-lg w-full bg-transparent border-slate-200 dark:border-white/20 text-[var(--text-primary)]"
                   onChange={(e) =>
                     setNewRule({
                       ...newRule,
@@ -203,23 +203,23 @@ export default function AlertsPage() {
           </div>
         )}
 
-        <div className="apple-glass-card rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="apple-glass-card rounded-2xl shadow-sm border border-slate-200 dark:border-white/10 overflow-hidden">
           <table className="w-full text-left">
-            <thead className="apple-glass-inner border-b border-slate-200">
+            <thead className="apple-glass-inner border-b border-slate-200 dark:border-white/10">
               <tr>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase">
+                <th className="p-4 text-xs font-bold uppercase" style={{ color: 'var(--text-muted)' }}>
                   Rule Name
                 </th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase">
+                <th className="p-4 text-xs font-bold uppercase" style={{ color: 'var(--text-muted)' }}>
                   Conditions
                 </th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase">
+                <th className="p-4 text-xs font-bold uppercase" style={{ color: 'var(--text-muted)' }}>
                   Target Node
                 </th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase">
+                <th className="p-4 text-xs font-bold uppercase" style={{ color: 'var(--text-muted)' }}>
                   Status
                 </th>
-                <th className="p-4 text-xs font-bold text-slate-500 uppercase text-right">
+                <th className="p-4 text-xs font-bold uppercase text-right" style={{ color: 'var(--text-muted)' }}>
                   Actions
                 </th>
               </tr>
@@ -230,24 +230,24 @@ export default function AlertsPage() {
                   key={rule.id}
                   className="hover:bg-white/30 transition-colors"
                 >
-                  <td className="p-4 font-medium text-slate-700">
+                  <td className="p-4 font-medium" style={{ color: 'var(--text-primary)' }}>
                     {rule.name}
                   </td>
-                  <td className="p-4 text-slate-600 font-mono text-sm">
+                  <td className="p-4 font-mono text-sm" style={{ color: 'var(--text-muted)' }}>
                     {rule.metric}{" "}
                     <span className="text-blue-600 font-bold">
                       {rule.condition}
                     </span>{" "}
                     {rule.threshold}
                   </td>
-                  <td className="p-4 text-slate-600 text-sm">{rule.node_id}</td>
+                  <td className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>{rule.node_id}</td>
                   <td className="p-4">
                     {rule.enabled ? (
-                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full flex w-fit items-center gap-1">
+                      <span className="text-xs font-bold text-green-600 bg-green-500/10 px-2 py-1 rounded-full flex w-fit items-center gap-1">
                         <CheckCircle className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full flex w-fit items-center gap-1">
+                      <span className="text-xs font-bold text-gray-400 bg-gray-500/10 px-2 py-1 rounded-full flex w-fit items-center gap-1">
                         <XCircle className="w-3 h-3" /> Disabled
                       </span>
                     )}
@@ -266,7 +266,8 @@ export default function AlertsPage() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="p-8 text-center text-slate-400 italic"
+                    className="p-8 text-center italic"
+                    style={{ color: 'var(--text-muted)' }}
                   >
                     No rules defined yet.
                   </td>

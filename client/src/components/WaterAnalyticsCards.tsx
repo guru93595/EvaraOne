@@ -14,13 +14,28 @@ const Card: React.FC<{ title: string; value: string | number; unit: string; high
   highlight = 'neutral',
   icon 
 }) => {
+  const isDark = document.documentElement.classList.contains('dark');
+  
   const highlightColors = {
-    positive: { bg: 'rgba(52,199,89,0.1)', text: '#34C759', border: 'rgba(52,199,89,0.2)' },
-    negative: { bg: 'rgba(255,59,48,0.1)', text: '#FF3B30', border: 'rgba(255,59,48,0.2)' },
-    neutral: { bg: 'rgba(0,0,0,0.02)', text: '#1C1C1E', border: 'rgba(0,0,0,0.05)' },
+    positive: { 
+      bg: isDark ? 'rgba(52,199,89,0.15)' : 'rgba(52,199,89,0.1)', 
+      text: isDark ? '#5FE083' : '#34C759', 
+      border: isDark ? 'rgba(52,199,89,0.3)' : 'rgba(52,199,89,0.2)' 
+    },
+    negative: { 
+      bg: isDark ? 'rgba(255,59,48,0.15)' : 'rgba(255,59,48,0.1)', 
+      text: isDark ? '#FF6B63' : '#FF3B30', 
+      border: isDark ? 'rgba(255,59,48,0.3)' : 'rgba(255,59,48,0.2)' 
+    },
+    neutral: { 
+      bg: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)', 
+      text: isDark ? '#E5E5E7' : '#1C1C1E', 
+      border: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' 
+    },
   };
 
   const colors = highlightColors[highlight];
+  const isDark2 = document.documentElement.classList.contains('dark');
 
   return (
     <div 
@@ -32,23 +47,25 @@ const Card: React.FC<{ title: string; value: string | number; unit: string; high
       }}
     >
       <div className="flex items-center gap-2 mb-2">
-        {icon && <span className="material-symbols-rounded" style={{ fontSize: 16, color: '#8E8E93' }}>{icon}</span>}
-        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#8E8E93' }}>{title}</span>
+        {icon && <span className="material-symbols-rounded" style={{ fontSize: 16, color: isDark2 ? '#A1A1A6' : '#8E8E93' }}>{icon}</span>}
+        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: isDark2 ? '#A1A1A6' : '#8E8E93' }}>{title}</span>
       </div>
       <div className="flex items-baseline gap-1">
         <span className="text-2xl font-bold" style={{ color: colors.text }}>{value}</span>
-        <span className="text-xs font-medium" style={{ color: '#8E8E93' }}>{unit}</span>
+        <span className="text-xs font-medium" style={{ color: isDark2 ? '#A1A1A6' : '#8E8E93' }}>{unit}</span>
       </div>
     </div>
   );
 };
 
 export const WaterAnalyticsCards: React.FC<WaterAnalyticsCardsProps> = ({ analytics, loading }) => {
+  const isDark = document.documentElement.classList.contains('dark');
+  
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {[...Array(10)].map((_, i) => (
-          <div key={i} className="h-[100px] rounded-2xl animate-pulse" style={{ background: 'rgba(0,0,0,0.05)' }} />
+          <div key={i} className="h-[100px] rounded-2xl animate-pulse" style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }} />
         ))}
       </div>
     );

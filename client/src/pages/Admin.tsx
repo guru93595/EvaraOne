@@ -76,12 +76,12 @@ const Widget = ({
     className={clsx(
       "apple-glass-card transition-all duration-500 flex flex-col cursor-pointer lg:min-h-[220px]",
       expanded
-        ? "col-span-3 row-span-2 z-50 bg-white/95"
+        ? "col-span-3 row-span-2 z-50 bg-white/95 dark:bg-black/80 backdrop-blur-2xl"
         : "col-span-1 hover:scale-[1.02]",
     )}
   >
     {expanded ? (
-      <div className="p-6 flex items-center gap-4 bg-white/50 border-b border-gray-100/50 backdrop-blur-md">
+      <div className="p-6 flex items-center gap-4 bg-white/50 dark:bg-white/5 border-b border-gray-100/50 dark:border-white/10 backdrop-blur-md">
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg"
           style={{ background: iconBg }}
@@ -89,17 +89,17 @@ const Widget = ({
           <Icon size={24} color="#FFF" />
         </div>
         <div className="flex-1">
-          <h3 className="text-lg font-black text-gray-800 tracking-tight">
+          <h3 className="text-lg font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
             {title}
           </h3>
-          <p className="text-sm text-gray-500 font-medium">{summary}</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{summary}</p>
         </div>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onClick();
           }}
-          className="p-2 rounded-xl bg-white/80 border border-gray-200 hover:bg-gray-50 transition-colors"
+          className="p-2 rounded-xl bg-white/80 dark:bg-white/10 border border-gray-200 dark:border-white/20 hover:bg-gray-50 dark:hover:bg-white/20 transition-colors"
         >
           <X size={20} color="#94A3B8" />
         </button>
@@ -114,10 +114,10 @@ const Widget = ({
           <Icon size={44} color={iconBg} />
         </motion.div>
         <div className="text-center">
-          <h3 className="text-[19px] font-black text-gray-700 tracking-tight">
+          <h3 className="text-[19px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
             {title}
           </h3>
-          <p className="text-[13px] text-gray-400 mt-1.5 font-bold uppercase tracking-wide">
+          <p className="text-[13px] mt-1.5 font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
             {summary}
           </p>
         </div>
@@ -172,9 +172,9 @@ const StatPill = ({
     whileHover={{ y: -5 }}
     style={{
       padding: "20px 16px",
-      background: "#FFF",
+      background: "var(--card-bg)",
       borderRadius: "24px",
-      border: "1px solid #E2E8F0",
+      border: "1px solid var(--card-border)",
       boxShadow:
         "0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01)",
       display: "flex",
@@ -220,7 +220,7 @@ const StatPill = ({
         style={{
           fontSize: "24px",
           fontWeight: 900,
-          color: "#1E293B",
+          color: "var(--text-primary)",
           letterSpacing: "-0.03em",
         }}
       >
@@ -229,7 +229,7 @@ const StatPill = ({
       <div
         style={{
           fontSize: "11px",
-          color: "#64748B",
+          color: "var(--text-muted)",
           fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
@@ -305,7 +305,7 @@ const Admin = () => {
     { name: "Command", subtitle: "Super Admin", icon: Crown, color: "#6366F1" },
     { name: "Customer", subtitle: "End User", icon: User, color: "#10B981" },
   ];
-  const t = tabs.find((x) => x.name === activeTab) || tabs[2];
+  const t = tabs.find((x) => x.name === activeTab) || tabs[0];
 
   const toggle = (key: string) =>
     setExpanded((prev) => (prev === key ? null : key));
@@ -327,6 +327,25 @@ const Admin = () => {
 
   if (!isAuthenticated) return null;
 
+  // Wait for loading to complete and role to be available
+  if (loadingHierarchy || loadingStats) {
+    return (
+      <div
+        style={{
+          height: "calc(100vh - 64px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-3"></div>
+          <p style={{ color: "var(--text-muted)" }}>Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -336,7 +355,7 @@ const Admin = () => {
         padding: "24px",
         gap: "20px",
         overflow: "hidden",
-        background: "#F8FAFC",
+        background: "transparent",
       }}
     >
       {/* Header Section */}
@@ -348,10 +367,10 @@ const Admin = () => {
           alignItems: "center",
           gap: "16px",
           flexShrink: 0,
-          background: "#FFF",
+          background: "var(--card-bg)",
           borderRadius: "24px",
           padding: "16px 28px",
-          border: "1px solid #E2E8F0",
+          border: "1px solid var(--card-border)",
           boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.03)",
         }}
       >
@@ -374,7 +393,7 @@ const Admin = () => {
             style={{
               fontWeight: 900,
               fontSize: "22px",
-              color: "#1E293B",
+              color: "var(--text-primary)",
               margin: 0,
               letterSpacing: "-0.02em",
             }}
@@ -404,12 +423,12 @@ const Admin = () => {
               {t.subtitle}
             </span>
             <span
-              style={{ fontSize: "12px", color: "#94A3B8", fontWeight: 500 }}
+              style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 500 }}
             >
               •
             </span>
             <span
-              style={{ fontSize: "12px", color: "#64748B", fontWeight: 600 }}
+              style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 600 }}
             >
               Real-time Governance
             </span>
@@ -418,7 +437,7 @@ const Admin = () => {
         <div style={{ display: "flex", gap: "12px" }}>
           <button
             onClick={() => queryClient.invalidateQueries()}
-            className="p-2.5 apple-glass-inner border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all"
+            className="p-2.5 apple-glass-inner border border-slate-200 dark:border-white/10 rounded-xl text-slate-500 hover:text-indigo-600 hover:border-indigo-200 transition-all"
           >
             <RefreshCw
               size={18}
@@ -480,7 +499,7 @@ const Admin = () => {
             {/* SaaS Plan Usage - Visible when a distributor is selected */}
             {activeDistributor && stats && (
               <div style={{ gridColumn: "span 3", marginBottom: "16px" }}>
-                <div className="p-6 rounded-[32px] apple-glass border border-white/40 shadow-xl flex flex-col md:flex-row gap-8 items-center">
+                <div className="p-6 rounded-[32px] apple-glass border border-white/40 dark:border-white/10 shadow-xl flex flex-col md:flex-row gap-8 items-center">
                   <div className="flex-1 w-full">
                     <UsageMeter
                       label="Device Quota"
@@ -494,7 +513,7 @@ const Admin = () => {
                       Current Plan
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xl font-black text-slate-800">
+                      <span className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>
                         {activeDistributor.plan?.name || "Base"}
                       </span>
                       <button className="text-[11px] font-bold text-indigo-500 hover:text-indigo-600 underline">
@@ -587,10 +606,10 @@ const Admin = () => {
                 {hierarchy.map((zone) => (
                   <div
                     key={zone.id}
-                    className="p-5 rounded-3xl apple-glass-inner border border-slate-200 hover:border-indigo-300 transition-all group"
+                    className="p-5 rounded-3xl apple-glass-inner border border-slate-200 dark:border-white/10 hover:border-indigo-300 transition-all group"
                   >
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
+                      <h3 className="font-extrabold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                         <div className="w-2 h-2 rounded-full bg-indigo-500" />
                         {zone.name}
                       </h3>
@@ -602,7 +621,8 @@ const Admin = () => {
                       {(zone as any).customers?.map((c: any) => (
                         <div
                           key={c.id}
-                          className="text-xs text-slate-500 font-semibold pl-4 border-l-2 border-slate-200 flex items-center justify-between"
+                          className="text-xs font-semibold pl-4 border-l-2 border-slate-200 dark:border-white/10 flex items-center justify-between"
+                          style={{ color: 'var(--text-muted)' }}
                         >
                           {c.display_name || c.full_name}
                           <span className="opacity-0 group-hover:opacity-100 transition-opacity text-indigo-400">
@@ -669,27 +689,27 @@ const Admin = () => {
                 marginBottom: "8px",
               }}
             >
-              <div className="p-5 rounded-[28px] bg-indigo-50/50 border border-indigo-100 flex flex-col justify-center">
+              <div className="p-5 rounded-[28px] bg-indigo-500/10 border border-indigo-500/20 flex flex-col justify-center">
                 <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">
                   Active Tenants
                 </span>
-                <span className="text-2xl font-black text-indigo-900 leading-none">
+                <span className="text-2xl font-black leading-none" style={{ color: 'var(--text-primary)' }}>
                   {distributors.length}
                 </span>
               </div>
-              <div className="p-5 rounded-[28px] bg-emerald-50/50 border border-emerald-100 flex flex-col justify-center">
+              <div className="p-5 rounded-[28px] bg-emerald-500/10 border border-emerald-500/20 flex flex-col justify-center">
                 <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">
                   Global Health
                 </span>
-                <span className="text-2xl font-black text-emerald-900 leading-none">
+                <span className="text-2xl font-black leading-none" style={{ color: 'var(--text-primary)' }}>
                   {stats?.system_health || 100}%
                 </span>
               </div>
-              <div className="p-5 rounded-[28px] bg-rose-50/50 border border-rose-100 flex flex-col justify-center">
+              <div className="p-5 rounded-[28px] bg-rose-500/10 border border-rose-500/20 flex flex-col justify-center">
                 <span className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">
                   Alerts
                 </span>
-                <span className="text-2xl font-black text-rose-900 leading-none">
+                <span className="text-2xl font-black leading-none" style={{ color: 'var(--text-primary)' }}>
                   {stats?.alerts_active || 0}
                 </span>
               </div>
@@ -711,61 +731,67 @@ const Admin = () => {
                   gap: "16px",
                 }}
               >
-                {auditLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    style={{
-                      display: "flex",
-                      gap: "16px",
-                      padding: "12px 0",
-                      borderBottom: "1px solid #F1F5F9",
-                    }}
-                  >
+                {auditLogs?.length > 0 ? (
+                  auditLogs?.map((log) => (
                     <div
+                      key={log.id}
                       style={{
-                        fontSize: "18px",
-                        padding: "8px",
-                        background: "#F8FAFC",
-                        borderRadius: "10px",
+                        display: "flex",
+                        gap: "16px",
+                        padding: "12px 0",
+                        borderBottom: "1px solid var(--card-border)",
                       }}
                     >
-                      {log.action.includes("create")
-                        ? "🆕"
-                        : log.action.includes("update")
-                          ? "📝"
-                          : "🔒"}
-                    </div>
-                    <div style={{ flex: 1 }}>
                       <div
                         style={{
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          color: "#334155",
+                          fontSize: "18px",
+                          padding: "8px",
+                          background: "var(--bg-primary)",
+                          borderRadius: "10px",
                         }}
                       >
-                        {log.action || log.action_type}
+                        {log?.action?.includes("create")
+                          ? "🆕"
+                          : log?.action?.includes("update")
+                            ? "📝"
+                            : "🔒"}
                       </div>
-                      <div style={{ fontSize: "12px", color: "#64748B" }}>
-                        {log.resource_type} •{" "}
-                        <span style={{ color: "#94A3B8" }}>
-                          {new Date(log.created_at).toLocaleString()}
-                        </span>
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            color: "var(--text-primary)",
+                          }}
+                        >
+                          {log?.action || log?.action_type || "Unknown Action"}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                          {log?.resource_type || "Unknown Resource"} •{" "}
+                          <span style={{ color: "#94A3B8" }}>
+                            {log?.created_at ? new Date(log.created_at).toLocaleString() : "Unknown Date"}
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          textAlign: "right",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          color: "#6366F1",
+                        }}
+                      >
+                        {log?.user?.full_name ||
+                          log?.profiles?.full_name ||
+                          "System"}
                       </div>
                     </div>
-                    <div
-                      style={{
-                        textAlign: "right",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        color: "#6366F1",
-                      }}
-                    >
-                      {log.user?.full_name ||
-                        log.profiles?.full_name ||
-                        "System"}
-                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: "center", padding: "20px", color: "var(--text-muted)" }}>
+                    No audit logs available
                   </div>
-                ))}
+                )}
               </div>
             </Widget>
           </>
@@ -818,7 +844,7 @@ const Admin = () => {
               exit={{ scale: 0.9, opacity: 0, y: 30 }}
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: "rgba(255, 255, 255, 0.95)",
+                background: "var(--card-bg)",
                 backdropFilter: "blur(20px)",
                 borderRadius: "40px",
                 width: "100%",
@@ -842,7 +868,7 @@ const Admin = () => {
                   style={{
                     fontSize: "24px",
                     fontWeight: 900,
-                    color: "#1E293B",
+                    color: "var(--text-primary)",
                     letterSpacing: "-0.02em",
                   }}
                 >
@@ -855,7 +881,7 @@ const Admin = () => {
                   style={{
                     padding: "8px",
                     borderRadius: "50%",
-                    background: "#F1F5F9",
+                    background: "var(--bg-primary)",
                   }}
                 >
                   <X size={20} color="#64748B" />

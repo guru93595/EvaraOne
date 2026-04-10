@@ -74,12 +74,12 @@ const DimInput = ({
   <div className="flex flex-col gap-1">
     <label
       htmlFor={`tank-dim-${dimKey}`}
-      className="flex items-center gap-1.5 text-[11px] font-[700] text-slate-600 uppercase tracking-wide"
+      className="flex items-center gap-1.5 text-[11px] font-[700] text-slate-600 dark:text-slate-300 uppercase tracking-wide"
       title={tooltip}
     >
       <Ruler size={10} className="text-indigo-400" />
       {label}
-      <span className="text-[9px] text-slate-400 lowercase font-normal normal-case tracking-normal">
+      <span className="text-[9px] text-slate-400 dark:text-slate-500 lowercase font-normal normal-case tracking-normal">
         ({unitLabel})
       </span>
     </label>
@@ -177,7 +177,7 @@ export const TankDimensionsCalculator = ({
       {/* ── Cylindrical: radius / diameter toggle ── */}
       {shape === 'cylindrical' && (
         <div className="flex items-center gap-2 text-[11px]">
-          <span className="text-slate-500 font-[600]">Input as:</span>
+          <span className="text-slate-500 dark:text-slate-400 font-[600]">Input as:</span>
           <button
             type="button"
             onClick={toggleDiameter}

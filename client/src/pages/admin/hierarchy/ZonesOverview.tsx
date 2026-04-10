@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { adminService } from "../../../services/admin";
 import { Modal } from "../../../components/ui/Modal";
@@ -31,11 +30,10 @@ interface RegionStat {
 }
 
 const RegionsOverview = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, role, loading: authLoading } = useAuth();
   const [zones, setRegions] = useState<RegionRow[]>([]);
   const [stats, setStats] = useState<RegionStat[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingZone, setEditingZone] = useState<RegionRow | null>(null);
   const { showToast } = useToast();
@@ -61,12 +59,10 @@ const RegionsOverview = () => {
   };
 
   useEffect(() => {
-    if (user) {
-
+    if (!authLoading) {
       fetchData();
-    } else {
     }
-  }, [user]);
+  }, [authLoading]);
 
   const getStatsForRegion = (regionId: string) => {
     const s = stats.find((st) => st.zone_id === regionId);
@@ -104,20 +100,28 @@ const RegionsOverview = () => {
     }
   };
 
+  if (loading || authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3A7AFE]"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="glass-dashboard min-h-screen p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-[32px]">
         <div>
-          <h2 className="text-[28px] font-[600] tracking-[-0.5px] text-[#1F2937] leading-tight">
+          <h2 className="text-[28px] font-[600] tracking-[-0.5px] zone-page-heading leading-tight">
             Operational Zones
           </h2>
-          <p className="glass-secondary mt-1">
+          <p className="zone-page-subheading mt-1">
             {zones.length} zone{zones.length !== 1 ? "s" : ""} configured across
             the network.
           </p>
         </div>
-        {user?.role === "superadmin" && (
+        {role === "superadmin" && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-[12px] bg-[#3A7AFE] text-white font-[700] text-[13px] shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -130,16 +134,15 @@ const RegionsOverview = () => {
 
       {/* Zone Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
-        {zones.map((zone) => {
-          const rs = getStatsForRegion(zone.id);
+        {(zones || []).map((zone) => {
+          const rs = getStatsForRegion(zone?.id);
           const healthPercent =
             rs.devices > 0 ? Math.round((rs.online / rs.devices) * 100) : 100;
 
           return (
             <div
-              key={zone.id}
-              onClick={() => navigate(`/superadmin/zones/${zone.id}/customers`)}
-              className="apple-glass-card group cursor-pointer"
+              key={zone?.id}
+              className="apple-glass-card group"
             >
               <div className="apple-glass-content relative flex flex-col h-full p-[24px]">
                 {/* Background Icon */}
@@ -150,8 +153,8 @@ const RegionsOverview = () => {
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3 mb-5">
                   <div className="flex items-center gap-[12px]">
-                    <div className="w-[48px] h-[48px] rounded-[16px] bg-[rgba(255,255,255,0.3)] border border-[rgba(255,255,255,0.4)] flex items-center justify-center text-[#1F2937] opacity-80 font-[700] text-[15px] shadow-sm group-hover:scale-105 transition-transform duration-300">
-                      {(zone.zoneName || "")
+                    <div className="w-[48px] h-[48px] rounded-[16px] bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] flex items-center justify-center text-[var(--text-primary)] opacity-80 font-[700] text-[15px] shadow-sm group-hover:scale-105 transition-transform duration-300">
+                      {(zone?.zoneName || "")
                         .split(" ")
                         .map((w) => w[0])
                         .join("")
@@ -159,28 +162,28 @@ const RegionsOverview = () => {
                         .toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="text-[16px] font-[600] text-[#1F2937] group-hover:text-[#3A7AFE] transition-colors">
-                        {zone.zoneName}
+                      <h3 className="text-[16px] font-[600] zone-name group-hover:text-[#3A7AFE] dark:group-hover:text-blue-400 transition-colors">
+                        {zone?.zoneName}
                       </h3>
-                      {zone.state && (
-                        <p className="text-[12px] text-[#1F2937] opacity-60 flex items-center gap-[4px] mt-1 font-[500]">
+                      {zone?.state && (
+                        <p className="text-[12px] zone-location flex items-center gap-[4px] mt-1 font-[500]">
                           <Globe size={11} className="opacity-70" />{" "}
-                          {zone.state}, {zone.country || "India"}
+                          {zone?.state}, {zone?.country || "India"}
                         </p>
                       )}
                     </div>
                   </div>
-                  {zone.zone_code && (
-                    <span className="px-[8px] py-[4px] bg-[rgba(255,255,255,0.4)] border border-[rgba(255,255,255,0.5)] text-[#1F2937] text-[10px] font-[700] rounded-[6px] uppercase shadow-sm">
-                      {zone.zone_code}
+                  {zone?.zone_code && (
+                    <span className="px-[8px] py-[4px] bg-[rgba(255,255,255,0.4)] dark:bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.5)] dark:border-[rgba(255,255,255,0.2)] text-[#1F2937] dark:text-white text-[10px] font-[700] rounded-[6px] uppercase shadow-sm">
+                      {zone?.zone_code}
                     </span>
                   )}
                 </div>
 
                 {/* Description */}
-                {zone.description && (
-                  <p className="text-[13px] text-[#1F2937] opacity-70 mb-[20px] line-clamp-2 leading-relaxed">
-                    {zone.description}
+                {zone?.description && (
+                  <p className="text-[13px] zone-desc mb-[20px] line-clamp-2 leading-relaxed">
+                    {zone?.description}
                   </p>
                 )}
 
@@ -188,21 +191,21 @@ const RegionsOverview = () => {
                 <div className="apple-glass-inner p-[16px] space-y-[12px] relative z-10 mb-[20px] flex-1">
 
                   <div className="flex items-center justify-between text-[13px]">
-                    <span className="flex items-center gap-[8px] text-[#1F2937] opacity-70 font-[500]">
+                    <span className="flex items-center gap-[8px] zone-stat-label font-[500]">
                       <Users size={14} className="opacity-50" /> Customers
                     </span>
-                    <span className="font-[600] text-[#1F2937]">
+                    <span className="font-[600] zone-stat-number">
                       {rs.customers}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[13px]">
-                    <span className="flex items-center gap-[8px] text-[#1F2937] opacity-70 font-[500]">
+                    <span className="flex items-center gap-[8px] zone-stat-label font-[500]">
                       <Hash size={14} className="opacity-50" /> Devices
                     </span>
-                    <span className="font-[600] text-[#1F2937] flex items-center gap-[6px]">
+                    <span className="font-[600] zone-stat-number flex items-center gap-[6px]">
                       {rs.devices}
                       {rs.devices > 0 && (
-                        <span className="text-[10px] font-[700] text-[#1F2937] opacity-60 bg-[rgba(255,255,255,0.4)] px-[6px] py-[2px] rounded-[4px] border border-[rgba(255,255,255,0.5)]">
+                        <span className="text-[10px] font-[700] text-[#1F2937] dark:text-white opacity-60 dark:opacity-80 bg-[rgba(255,255,255,0.4)] dark:bg-[rgba(255,255,255,0.1)] px-[6px] py-[2px] rounded-[4px] border border-[rgba(255,255,255,0.5)] dark:border-[rgba(255,255,255,0.2)]">
                           {rs.online}↑ {rs.offline}↓
                         </span>
                       )}
@@ -239,7 +242,7 @@ const RegionsOverview = () => {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-[4px] text-[11px] font-[700] text-[#3A7AFE] uppercase tracking-wider opacity-80 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-[4px] text-[11px] font-[700] zone-manage uppercase tracking-wider opacity-80 group-hover:opacity-100 transition-opacity">
                       {user?.role === "superadmin" && (
                         <div className="flex items-center gap-2 mr-4">
                           <button
@@ -247,21 +250,21 @@ const RegionsOverview = () => {
                               e.stopPropagation();
                               setEditingZone(zone);
                             }}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors"
+                            className="p-1.5 hover:bg-blue-50/50 rounded-lg zone-icon transition-colors"
                             title="Edit Zone"
                           >
                             <Edit2 size={14} />
                           </button>
                           <button
                             onClick={(e) => handleDeleteZone(e, zone.id)}
-                            className="p-1.5 hover:bg-red-50 rounded-lg text-red-600 transition-colors"
+                            className="p-1.5 hover:bg-red-50/50 rounded-lg zone-icon transition-colors"
                             title="Delete Zone"
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
                       )}
-                      <span>Enter</span>
+                      <span>Manage</span>
                       <ArrowRight
                         size={14}
                         className="transform group-hover:translate-x-1 transition-transform"

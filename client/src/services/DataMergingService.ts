@@ -185,9 +185,9 @@ class DataMergingService {
     // Step 1: Remove trend anomalies (catches spikes in raw ThingSpeak history)
     const cleanedData = this.removeTrendAnomalies(limitedData);
     
-    // Step 2: Adaptive Smoothing is now handled on the Backend. 
-    // We omit frontend EMA here to ensure absolute parity with Map/List/Tank cards.
-    const smoothedData = cleanedData; // No more lag-inducing frontend EMA
+    // Step 2: Apply Exponential Moving Average (EMA) for visual smoothing
+    // This removes the "noisy" zig-zags as requested by the user.
+    const smoothedData = this.applyExponentialSmoothing(cleanedData, 0.2);
 
     // Step 3: Detect capacity so volume tracks level perfectly
     // capacity = max_volume_in_data / (corresponding_level / 100)

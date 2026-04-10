@@ -7,7 +7,7 @@ interface PlanBadgeProps {
 
 export const PlanBadge: React.FC<PlanBadgeProps> = ({ planName }) => {
     const colors: Record<string, string> = {
-        'base': 'bg-slate-100 text-slate-600',
+        'base': 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300',
         'plus': 'bg-blue-50 text-blue-600 border-blue-100',
         'pro': 'bg-indigo-50 text-indigo-600 border-indigo-100',
         'enterprise': 'bg-purple-50 text-purple-600 border-purple-100'

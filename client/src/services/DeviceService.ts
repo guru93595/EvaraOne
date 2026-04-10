@@ -9,6 +9,11 @@ export interface MapDevice extends Device {
   last_online_at?: string | null;
   updatedAt?: string;
   last_telemetry?: any;
+  customer_config?: {
+    showMap?: boolean;
+    [key: string]: any;
+  };
+  isVisibleToCustomer?: boolean;
 }
 
 /**
@@ -336,8 +341,8 @@ class NodeService {
     link.remove();
   }
 
-  async getNodeAnalytics(id: string): Promise<any> {
-    const response = await api.get(`/nodes/${id}/analytics`);
+  async getNodeAnalytics(id: string, params?: { range?: string; startDate?: string; endDate?: string }): Promise<any> {
+    const response = await api.get(`/nodes/${id}/analytics`, { params });
     return response.data;
   }
 

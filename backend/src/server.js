@@ -168,7 +168,14 @@ if (pubSub) {
             const payload = JSON.parse(message);
             const deviceId = channel.split(":")[2];
             if (deviceId) {
+                // Emit to specific device room (for detailed analytics pages)
                 io.to(`room:${deviceId}`).emit("device:update", payload);
+                // Also emit telemetry_update to all clients (for All Nodes list view)
+                io.emit("telemetry_update", {
+                    device_id: deviceId,
+                    node_id: deviceId,
+                    ...payload
+                });
             }
         } catch (err) {}
     });
@@ -178,7 +185,14 @@ if (pubSub) {
 // Node.js EventEmitter doesn't support regex patterns — use explicit wildcard
 telemetryEvents.on("device:update", (payload) => {
     if (payload && payload.deviceId) {
+        // Emit to specific device room (for detailed analytics pages)
         io.to(`room:${payload.deviceId}`).emit("device:update", payload);
+        // Also emit telemetry_update to all clients (for All Nodes list view)
+        io.emit("telemetry_update", {
+            device_id: payload.deviceId,
+            node_id: payload.deviceId,
+            ...payload
+        });
     }
 });
 
@@ -187,6 +201,10 @@ telemetryEvents.on("device:update", (payload) => {
 
 // SaaS Architecture: Global Security Stack for Authenticated Routes
 const globalSaaSAuth = [requireAuth, tenantCheck, rbac()];
+
+// Authentication routes (no auth required for verify-token, required for /me)
+const authRoutes = require("./routes/auth.routes.js");
+app.use("/api/v1/auth", authRoutes);
 
 // Main admin routes
 app.use("/api/v1/admin", globalSaaSAuth, adminRoutes);

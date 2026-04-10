@@ -17,19 +17,19 @@ const AdminLayout = () => {
     const navItems = [
         { name: 'Dashboard', path: '/superadmin/dashboard', icon: LayoutDashboard },
         { name: 'Customers', path: '/superadmin/customers', icon: Users },
-        { name: 'Zones & Zones', path: '/superadmin/zones', icon: Database },
+        { name: 'Zones', path: '/superadmin/zones', icon: Database },
         { name: 'System Config', path: '/superadmin/config', icon: Settings },
     ];
 
     return (
-        <div className="min-h-screen flex flex-col font-sans text-[#1F2937]">
+        <div className="min-h-screen flex flex-col font-sans text-[var(--text-primary)] bg-transparent">
             <Navbar />
 
             <div className="flex-1 flex overflow-hidden">
                 {/* ─── LEFT SIDEBAR ─── */}
                 <aside
                     className={`
-                        fixed inset-y-0 left-0 z-50 apple-glass-card rounded-none border-r border-[rgba(255,255,255,0.2)] transition-all duration-300 ease-in-out flex flex-col
+                        fixed inset-y-0 left-0 z-50 apple-glass-card rounded-none border-r border-[var(--card-border)] transition-all duration-300 ease-in-out flex flex-col
                         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                         lg:relative lg:translate-x-0 lg:mt-[110px] lg:mb-6 lg:ml-6 lg:rounded-[32px] lg:border lg:shadow-[0_12px_40px_rgba(0,0,0,0.08)] lg:h-[calc(100vh-134px)]
                         ${isCollapsed ? 'w-[88px]' : 'w-[260px]'}
@@ -37,16 +37,16 @@ const AdminLayout = () => {
                 >
 
                     {/* Logo Area */}
-                    <div className={`h-16 flex items-center border-b border-slate-100 ${isCollapsed ? 'justify-center px-0' : 'px-6 gap-3'}`}>
+                    <div className={`h-16 flex items-center border-b border-[var(--card-border)] ${isCollapsed ? 'justify-center px-0' : 'px-6 gap-3'}`}>
                         <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
                             <Shield size={18} className="text-white" />
                         </div>
                         {!isCollapsed && (
                             <div className="overflow-hidden">
-                                <h1 className="text-base font-bold text-slate-800 tracking-wide uppercase">
+                                <h1 className="text-base font-bold text-[var(--text-primary)] tracking-wide uppercase">
                                     Super Admin
                                 </h1>
-                                <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wider truncate">
+                                <p className="text-[10px] text-blue-500 font-medium uppercase tracking-wider truncate">
                                     Global Command
                                 </p>
                             </div>
@@ -68,11 +68,11 @@ const AdminLayout = () => {
                                         flex items-center rounded-[12px] text-[13px] font-[600] transition-all group
                                         ${isCollapsed ? 'justify-center p-3' : 'gap-3 px-3 py-2.5'}
                                         ${isActive
-                                            ? 'bg-[#3A7AFE] text-white shadow-[0_4px_12px_rgba(58,122,254,0.3)]'
-                                            : 'text-[#1F2937] hover:bg-[rgba(255,255,255,0.4)]'}
+                                            ? 'bg-blue-600 text-white shadow-[0_4px_12px_rgba(58,122,254,0.3)]'
+                                            : 'text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5'}
                                     `}
                                 >
-                                    <item.icon size={18} className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-500'} />
+                                    <item.icon size={18} className={isActive ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-blue-500'} />
                                     {!isCollapsed && (
                                         <>
                                             <span className="truncate">{item.name}</span>
@@ -85,16 +85,16 @@ const AdminLayout = () => {
                     </nav>
 
                     {/* Bottom Profile & Toggle */}
-                    <div className="mt-auto p-4 border-t border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.1)] backdrop-blur-md lg:rounded-b-[32px]">
+                    <div className="mt-auto p-4 border-t border-[var(--card-border)] bg-black/5 dark:bg-white/5 backdrop-blur-md lg:rounded-b-[32px]">
                         {!isCollapsed ? (
                             <>
                                 <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-9 h-9 rounded-full bg-[rgba(255,255,255,0.4)] flex items-center justify-center border border-[rgba(255,255,255,0.5)] shrink-0">
-                                        <span className="text-[14px] font-[700] text-[#3A7AFE]">{user?.displayName?.[0]}</span>
+                                    <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0">
+                                        <span className="text-[14px] font-[700] text-blue-500">{user?.displayName?.[0]}</span>
                                     </div>
                                     <div className="overflow-hidden">
-                                        <p className="text-[13px] font-[600] text-[#1F2937] truncate">{user?.displayName}</p>
-                                        <p className="text-[10px] text-[#1F2937] opacity-60 font-[500] truncate">{user?.email}</p>
+                                        <p className="text-[13px] font-[600] text-[var(--text-primary)] truncate">{user?.displayName}</p>
+                                        <p className="text-[10px] text-[var(--text-muted)] font-[500] truncate">{user?.email}</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
@@ -106,7 +106,7 @@ const AdminLayout = () => {
                                     </button>
                                     <button
                                         onClick={() => setIsCollapsed(true)}
-                                        className="hidden lg:flex w-9 h-9 shrink-0 items-center justify-center rounded-[12px] border border-[rgba(255,255,255,0.6)] bg-white/40 text-slate-600 hover:bg-white hover:text-[#3A7AFE] transition-all shadow-sm"
+                                        className="hidden lg:flex w-9 h-9 shrink-0 items-center justify-center rounded-[12px] border border-[var(--card-border)] bg-black/5 dark:bg-white/5 text-[var(--text-muted)] hover:bg-black/10 dark:hover:bg-white/10 hover:text-blue-500 transition-all shadow-sm"
                                         title="Collapse Sidebar"
                                     >
                                         <ChevronLeft size={16} />
@@ -115,8 +115,8 @@ const AdminLayout = () => {
                             </>
                         ) : (
                             <div className="flex flex-col items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-[rgba(255,255,255,0.4)] flex items-center justify-center border border-[rgba(255,255,255,0.5)] shrink-0" title={user?.displayName}>
-                                    <span className="text-[14px] font-[700] text-[#3A7AFE]">{user?.displayName?.[0]}</span>
+                                <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0" title={user?.displayName}>
+                                    <span className="text-[14px] font-[700] text-blue-500">{user?.displayName?.[0]}</span>
                                 </div>
                                 <button
                                     onClick={logout}
@@ -127,7 +127,7 @@ const AdminLayout = () => {
                                 </button>
                                 <button
                                     onClick={() => setIsCollapsed(false)}
-                                    className="hidden lg:flex w-9 h-9 items-center justify-center rounded-[12px] border border-[#3A7AFE] bg-[#3A7AFE] text-white hover:bg-blue-600 transition-all shadow-sm mt-1"
+                                    className="hidden lg:flex w-9 h-9 items-center justify-center rounded-[12px] border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm mt-1"
                                     title="Expand Sidebar"
                                 >
                                     <ChevronRight size={16} />
@@ -140,11 +140,11 @@ const AdminLayout = () => {
                 {/* ─── MAIN CONTENT ─── */}
                 <div className="flex-1 flex flex-col min-w-0">
                     {/* Mobile Header */}
-                    <header className="h-16 lg:hidden flex items-center justify-between px-4 apple-glass-card rounded-none border-b border-[rgba(255,255,255,0.2)]">
-                        <button onClick={() => setSidebarOpen(true)} className="text-[#1F2937]">
+                    <header className="h-16 lg:hidden flex items-center justify-between px-4 apple-glass-card rounded-none border-b border-[var(--card-border)]">
+                        <button onClick={() => setSidebarOpen(true)} className="text-[var(--text-primary)]">
                             <Menu size={24} />
                         </button>
-                        <span className="font-[700] text-[#1F2937]">Admin Console</span>
+                        <span className="font-[700] text-[var(--text-primary)]">Admin Console</span>
                         <div className="w-6" /> {/* Spacer */}
                     </header>
 

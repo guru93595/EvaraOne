@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import {
   Eye,
@@ -34,10 +34,7 @@ const Login = () => {
 
   // If already logged in, redirect away from login page
   if (isAuthenticated && user) {
-    if (user.role === "superadmin") {
-      return <Navigate to="/superadmin/dashboard" replace />;
-    }
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/map" replace />;
   }
 
   // ─── Handlers ────────────────────────────────────────────────────────────
@@ -84,14 +81,8 @@ const Login = () => {
         ])) as Awaited<ReturnType<typeof loginFn>>;
 
         if (result.success && result.user) {
-          const role = result.user.role;
-
-          // Deterministic Routing based on verified role
-          if (role === "superadmin") {
-            navigate("/superadmin/dashboard");
-          } else {
-            navigate("/dashboard");
-          }
+          // Redirect all users to the Map page as requested
+          navigate("/map");
         } else {
           setError(result.error ?? "Invalid credentials.");
         }
@@ -107,7 +98,7 @@ const Login = () => {
         ])) as Awaited<ReturnType<typeof signupFn>>;
 
         if (result.success) {
-          navigate("/dashboard");
+          navigate("/map");
         } else {
           setError(result.error ?? "Registration failed.");
         }
@@ -131,10 +122,10 @@ const Login = () => {
             alt="EvaraTech"
             className="w-24 h-24 mx-auto mb-4 object-contain"
           />
-          <h1 className="text-4xl font-extrabold text-blue-900 mb-2">
+          <h1 className="text-4xl font-extrabold text-[var(--text-primary)] mb-2">
             Welcome to EvaraTech
           </h1>
-          <p className="text-slate-500 text-lg">
+          <p className="text-[var(--text-muted)] text-lg">
             Select your portal to continue
           </p>
         </div>
@@ -143,18 +134,18 @@ const Login = () => {
           {/* Super Admin Card */}
           <button
             onClick={() => handleRoleSelect("superadmin")}
-            className="group apple-glass-card p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-blue-300 transition-all text-left relative overflow-hidden min-h-[320px] w-full md:w-[380px] flex flex-col justify-end"
+            className="group apple-glass-card p-8 rounded-3xl shadow-sm border border-[var(--card-border)] hover:shadow-xl hover:border-blue-300 transition-all text-left relative overflow-hidden min-h-[320px] w-full md:w-[380px] flex flex-col justify-end"
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <Shield size={120} className="text-[#3A7AFE]" />
             </div>
-            <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mb-6 text-[#3A7AFE] group-hover:scale-110 transition-transform">
-              <Shield size={28} />
+            <div className="w-14 h-14 bg-blue-100/10 rounded-2xl flex items-center justify-center mb-6 text-blue-950 dark:text-[#3A7AFE] group-hover:scale-110 transition-transform">
+              <Shield size={28} strokeWidth={3} className="stroke-blue-950 dark:stroke-[#3A7AFE]" />
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-blue-700">
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2 group-hover:text-blue-500">
               Super Admin
             </h3>
-            <p className="text-sm text-slate-500 leading-relaxed">
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
               Full system control, user management, and global analytics.
             </p>
           </button>
@@ -162,18 +153,18 @@ const Login = () => {
           {/* Customer Card */}
           <button
             onClick={() => handleRoleSelect("customer")}
-            className="group apple-glass-card p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-green-300 transition-all text-left relative overflow-hidden min-h-[320px] w-full md:w-[380px] flex flex-col justify-end"
+            className="group apple-glass-card p-8 rounded-3xl shadow-sm border border-[var(--card-border)] hover:shadow-xl hover:border-green-300 transition-all text-left relative overflow-hidden min-h-[320px] w-full md:w-[380px] flex flex-col justify-end"
           >
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Users size={120} className="text-green-600" />
+              <Users size={120} className="text-green-500" />
             </div>
-            <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center mb-6 text-green-600 group-hover:scale-110 transition-transform">
-              <Users size={28} />
+            <div className="w-14 h-14 bg-green-100/10 rounded-2xl flex items-center justify-center mb-6 text-green-950 dark:text-green-500 group-hover:scale-110 transition-transform">
+              <Users size={28} strokeWidth={3} className="stroke-green-950 dark:stroke-green-500" />
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-green-700">
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2 group-hover:text-green-500">
               Customer
             </h3>
-            <p className="text-sm text-slate-500 leading-relaxed">
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed">
               Monitor your water usage, view status, and receive alerts.
             </p>
           </button>
@@ -191,7 +182,7 @@ const Login = () => {
       <div className="w-full max-w-lg">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 mb-6 font-medium transition-colors"
+          className="flex items-center gap-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-6 font-medium transition-colors"
         >
           <ArrowLeft size={18} /> Back to Role Selection
         </button>
@@ -211,10 +202,10 @@ const Login = () => {
               <Users size={32} />
             )}
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 capitalize">
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] capitalize">
             {selectedRole} Login
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-[var(--text-muted)] mt-1">
             Enter your credentials to access the dashboard
           </p>
         </div>
@@ -228,8 +219,8 @@ const Login = () => {
                 className={clsx(
                   "flex-1 py-4 text-sm font-bold transition-all flex items-center justify-center gap-2",
                   mode === "signin"
-                    ? "text-[#3A7AFE] border-b-2 border-[#3A7AFE] bg-blue-50/50"
-                    : "text-slate-400",
+                    ? "text-[#3A7AFE] border-b-2 border-[#3A7AFE] bg-blue-500/10"
+                    : "text-[var(--text-muted)]",
                 )}
               >
                 <LogIn size={16} /> Sign In
@@ -239,8 +230,8 @@ const Login = () => {
                 className={clsx(
                   "flex-1 py-4 text-sm font-bold transition-all flex items-center justify-center gap-2",
                   mode === "register"
-                    ? "text-green-600 border-b-2 border-green-600 bg-green-50/50"
-                    : "text-slate-400",
+                    ? "text-green-500 border-b-2 border-green-500 bg-green-500/10"
+                    : "text-[var(--text-muted)]",
                 )}
               >
                 <UserPlus size={16} /> Create Account
@@ -251,7 +242,7 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="p-8 space-y-5">
             {mode === "register" && !isSuperAdmin && (
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
+                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide mb-2 opacity-70">
                   Full Name
                 </label>
                 <input
@@ -259,14 +250,14 @@ const Login = () => {
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="e.g. John Doe"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 apple-glass-inner text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--card-border)] apple-glass-inner text-[var(--text-primary)] text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium placeholder:text-[var(--text-muted)]/50"
                   required
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
+              <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide mb-2 opacity-70">
                 Email Address
               </label>
               <input
@@ -274,13 +265,13 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 apple-glass-inner text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                className="w-full px-4 py-3 rounded-xl border border-[var(--card-border)] apple-glass-inner text-[var(--text-primary)] text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium placeholder:text-[var(--text-muted)]/50"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
+              <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide mb-2 opacity-70">
                 Password
               </label>
               <div className="relative">
@@ -289,13 +280,13 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 apple-glass-inner text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium pr-12"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--card-border)] apple-glass-inner text-[var(--text-primary)] text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 transition-all font-medium pr-12 placeholder:text-[var(--text-muted)]/50"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                 >
                   {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -337,7 +328,7 @@ const Login = () => {
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-400 mt-8 font-medium">
+        <p className="text-center text-xs text-[var(--text-muted)] mt-8 font-medium">
           Protected by EvaraTech Secure Access • © 2025
         </p>
       </div>

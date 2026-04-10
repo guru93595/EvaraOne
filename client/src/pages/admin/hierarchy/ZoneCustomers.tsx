@@ -145,7 +145,7 @@ const RegionCustomers = () => {
           )}
           <button
             onClick={() => navigate("/superadmin/zones")}
-            className="flex items-center gap-[8px] px-4 py-2 rounded-[12px] border border-[rgba(255,255,255,0.4)] bg-[rgba(255,255,255,0.3)] text-[#1F2937] opacity-80 hover:bg-[rgba(255,255,255,0.5)] text-[13px] font-[600] shadow-sm transition-all"
+            className="flex items-center gap-[8px] px-4 py-2 rounded-[12px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] text-[var(--text-primary)] opacity-80 hover:bg-[rgba(255,255,255,0.1)] text-[13px] font-[600] shadow-sm transition-all"
           >
             <ArrowLeft size={16} /> Back
           </button>

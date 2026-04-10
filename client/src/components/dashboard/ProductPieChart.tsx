@@ -23,9 +23,9 @@ export const ProductPieChart = ({
     return (
         <div className={clsx("apple-glass-card px-[20px] py-[16px] rounded-[20px] flex flex-col h-full", className)}>
             <div className="flex justify-between items-start mb-2 shrink-0">
-                <span className="text-[12px] font-[800] text-[#1f2937]/70 uppercase tracking-[0.1em]">Product Distribution</span>
-                <div className="w-6 h-6 rounded-full bg-blue-50/50 flex items-center justify-center border border-blue-100/20">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3A7AFE" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <span className="text-[12px] font-[800] text-[var(--text-primary)] uppercase tracking-[0.1em]">Product Distribution</span>
+                <div className="w-8 h-8 rounded-full bg-blue-500/10 dark:bg-blue-400/15 flex items-center justify-center border border-blue-500/20 dark:border-blue-400/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="icon-product-adaptive">
                         <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
                         <path d="M22 12A10 10 0 0 0 12 2v10z" />
                     </svg>

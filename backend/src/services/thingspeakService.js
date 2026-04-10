@@ -1,19 +1,17 @@
 const axios = require("axios");
 
 const fetchSixHourData = async (channelId, apiKey) => {
-  const url = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&results=8000`;
+  const url = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&results=300`;
   const res = await axios.get(url, { timeout: 10000 });
   const feeds = Array.isArray(res.data?.feeds) ? res.data.feeds : [];
   
   if (feeds.length === 0) return [];
   
-  const now = new Date();
-  const cutoffTime = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-  
-  // Return raw feeds that are within the last 6 hours
+  // Return all feeds — no time-based filter so we keep >= 200 for analysis
+  // Only filter out entries with no timestamp
   return feeds.filter(feed => {
     const timestamp = new Date(feed.created_at);
-    return timestamp >= cutoffTime && !isNaN(timestamp.getTime());
+    return !isNaN(timestamp.getTime());
   });
 };
 

@@ -70,16 +70,16 @@ export const ActionCard = ({
           <Icon size={24} />
         </div>
         {stats && (
-          <span className="px-2 py-1 rounded-md bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-500">
+          <span className="px-2 py-1 rounded-md action-badge text-[10px] font-bold">
             {stats}
           </span>
         )}
       </div>
 
-      <h3 className="text-lg font-bold text-slate-800 mb-1 group-hover:text-blue-600 transition-colors">
+      <h3 className="text-lg font-bold action-card-heading mb-1 group-hover:text-blue-600 transition-colors">
         {title}
       </h3>
-      <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+      <p className="text-sm action-card-desc mb-6 leading-relaxed">
         {description}
       </p>
 

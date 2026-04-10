@@ -13,6 +13,9 @@ const {
     calculateMetrics,
     getLatestFeed
 } = require("../services/thingspeakService.js");
+const {
+    analyzeWaterTank,
+} = require("../services/waterAnalyticsEngine.js");
 
 const normalizeThingSpeakTimestamp = (ts) => {
     if (!ts) return null;
@@ -70,6 +73,29 @@ async function syncNodeStatus(id, type, lastSeen, additionalData = {}) {
     } catch (err) {
         console.error(`Status sync failed for ${id}:`, err);
     }
+}
+
+/**
+ * Helper: build simple event timeline from history
+ */
+function buildEventTimeline(history, currentState) {
+  const events = [];
+  const colorMap = { CONSUMPTION: '#FF3B30', REFILL: '#34C759', STABLE: '#8E8E93' };
+
+  // Add the current state as the most recent event
+  if (history.length > 0 && currentState !== 'LEARNING') {
+    const last = history[history.length - 1];
+    const d = new Date(last.timestamp);
+    if (!isNaN(d.getTime())) {
+      events.push({
+        time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        label: currentState,
+        color: colorMap[currentState] || '#8E8E93'
+      });
+    }
+  }
+
+  return events.slice(-5);
 }
 
 exports.getNodes = async (req, res) => {
@@ -168,7 +194,29 @@ exports.getNodes = async (req, res) => {
                 // Strip sensitive keys
                 const { thingspeak_read_api_key, ...safeMeta } = meta;
 
-                nodes.push({
+                // Calculate level_percentage for tank devices
+                let levelPercentage = null;
+                const isTankType = type.toLowerCase().includes("tank") || type.toLowerCase().includes("evara");
+                
+                if (isTankType && meta.last_value !== undefined && meta.last_value !== null) {
+                    // Get tank depth from configuration
+                    const depth = meta.configuration?.depth || 
+                                 meta.configuration?.total_depth || 
+                                 meta.tank_depth || 
+                                 meta.depth || 
+                                 1.2; // Default fallback
+                    
+                    // last_value is raw distance in cm, convert to meters and calculate water height
+                    const rawDistanceCm = parseFloat(meta.last_value);
+                    if (!isNaN(rawDistanceCm) && depth > 0) {
+                        const distanceM = rawDistanceCm / 100;
+                        const validDistance = Math.min(distanceM, depth);
+                        const waterHeightM = Math.max(0, depth - validDistance);
+                        levelPercentage = Math.min(100, (waterHeightM / depth) * 100);
+                    }
+                }
+
+                const nodeData = {
                     id,
                     ...registryDataMap[id],
                     ...safeMeta,
@@ -178,12 +226,26 @@ exports.getNodes = async (req, res) => {
                     last_value: meta.last_value ?? null,
                     last_online_at: meta.last_online_at || lastSeen,
                     zone_name: zoneMap[meta.zone_id] || null
-                });
+                };
+
+                // Add calculated level_percentage for tanks
+                if (isTankType && levelPercentage !== null) {
+                    nodeData.level_percentage = levelPercentage;
+                    // Also update telemetry_snapshot to include level_percentage for frontend
+                    nodeData.telemetry_snapshot = {
+                        ...(nodeData.telemetry_snapshot || {}),
+                        level_percentage: levelPercentage,
+                        timestamp: lastSeen,
+                        status: dynamicStatus
+                    };
+                }
+
+                nodes.push(nodeData);
             }
         }
 
-        // Cache the result for 30 seconds
-        await cache.set(nodesCacheKey, nodes, 30);
+        // Cache the result for 10 seconds (balanced for real-time updates without overload)
+        await cache.set(nodesCacheKey, nodes, 10);
         res.status(200).json(nodes);
     } catch (error) {
         console.error(`[NodesController] Error in getNodes:`, error);
@@ -402,15 +464,23 @@ exports.getNodeTelemetry = async (req, res) => {
             const result = computeTelemetry(distance, feedTimestamp, status);
             result.raw_data = lastFeed;
 
-            await db.collection(type).doc(deviceDoc.id).update({
+            // Calculate and include level_percentage for consistency
+            const updatePayload = {
                 last_value: distance,
                 last_updated_at: feedTimestamp,
                 status: result.status,
                 raw_data: lastFeed,
-                last_telemetry_fetch: new Date().toISOString()
-            }).catch(() => null);
+                last_telemetry_fetch: new Date().toISOString(),
+                level_percentage: result.level_percentage // Include calculated percentage
+            };
 
-            syncNodeStatus(deviceDoc.id, type, feedTimestamp).catch(() => null);
+            await db.collection(type).doc(deviceDoc.id).update(updatePayload).catch(() => null);
+
+            // Sync status with level_percentage in telemetry_snapshot
+            syncNodeStatus(deviceDoc.id, type, feedTimestamp, {
+                level_percentage: result.level_percentage,
+                distance: distance
+            }).catch(err => console.error("Sync error:", err));
 
             telemetryCache.set(cacheKey, result);
             return res.status(200).json(result);
@@ -526,315 +596,239 @@ exports.getNodeGraphData = async (req, res) => {
 };
 
 exports.getNodeAnalytics = async (req, res) => {
-    try {
-        const deviceDoc = await resolveDevice(req.params.id);
-        if (!deviceDoc || !deviceDoc.exists) return res.status(404).json({ error: "Device not found" });
+  try {
+    const deviceDoc = await resolveDevice(req.params.id);
+    if (!deviceDoc || !deviceDoc.exists)
+      return res.status(404).json({ error: "Device not found" });
 
-        const type = (deviceDoc.data().device_type || "").toLowerCase();
-        if (!type) return res.status(400).json({ error: "Device type not specified" });
+    const type = (deviceDoc.data().device_type || "").toLowerCase();
+    if (!type) return res.status(400).json({ error: "Device type not specified" });
 
-        const metaDoc = await db.collection(type).doc(deviceDoc.id).get();
-        if (!metaDoc.exists) return res.status(404).json({ error: "Metadata not found" });
+    const metaDoc = await db.collection(type).doc(deviceDoc.id).get();
+    if (!metaDoc.exists) return res.status(404).json({ error: "Metadata not found" });
 
-        const isOwner = await checkOwnership(req.user.customer_id || req.user.uid, deviceDoc.id, req.user.role, req.user.community_id);
-        if (!isOwner) return res.status(403).json({ error: "Unauthorized" });
+    const isOwner = await checkOwnership(
+      req.user.customer_id || req.user.uid,
+      deviceDoc.id,
+      req.user.role,
+      req.user.community_id
+    );
+    if (!isOwner) return res.status(403).json({ error: "Unauthorized" });
 
-        const metadata = metaDoc.data();
-        const channelId = metadata.thingspeak_channel_id?.trim();
-        const apiKey = metadata.thingspeak_read_api_key?.trim();
-        const fieldMapping = metadata.sensor_field_mapping || {};
-        const depth = metadata.configuration?.depth || metadata.configuration?.total_depth || metadata.tank_size || 1.2;
-        const capacity = metadata.tank_size || 0;
+    const metadata = metaDoc.data();
+    const channelId = metadata.thingspeak_channel_id?.trim();
+    const apiKey = metadata.thingspeak_read_api_key?.trim();
+    const fieldMapping = metadata.sensor_field_mapping || {};
+    const depth = metadata.configuration?.depth || metadata.configuration?.total_depth || metadata.tank_size || 1.2;
+    const capacity = metadata.tank_size || 1000;
 
-        if (!channelId || !apiKey) return res.status(400).json({ error: "Telemetry configuration missing" });
+    const { range, startDate, endDate } = req.query;
 
-        // ── CACHE LAYER ────────────────────────────────────────────────────────
-        const analyticsCacheKey = `analytics_${deviceDoc.id}`;
-        const cachedAnalytics = await cache.get(analyticsCacheKey);
-        if (cachedAnalytics) {
-            console.log(`[NodesController] Serving cached analytics for ${deviceDoc.id}`);
-            return res.status(200).json(cachedAnalytics);
-        }
+    if (!channelId || !apiKey)
+      return res.status(400).json({ error: "Telemetry configuration missing" });
 
-        // Fetch enough results to cover trend analysis (150 pts is plenty for initial load)
-        const url = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&results=150`;
-        const response = await axios.get(url);
-        const feeds = response.data.feeds || [];
-
-        const sampleFeed = feeds[0] || {};
-        const definedField = metadata.secondary_field || metadata.water_level_field || metadata.fieldKey || metadata.configuration?.water_level_field || metadata.configuration?.fieldKey;
-
-        const fieldKey = fieldMapping.levelField || definedField ||
-            Object.keys(fieldMapping).find(k => fieldMapping[k] && fieldMapping[k].includes("water_level")) ||
-            (sampleFeed.field1 !== undefined ? "field1" : "field2");
-
-        // EXPLICIT FLOW BYPASS - SMART FIELD SCAN
-        if (["evaraflow", "flow", "flow_meter"].includes(type)) {
-            let flowRateFieldKey = deviceDoc.data().flow_rate_field ||
-                Object.keys(fieldMapping).find(k => fieldMapping[k] === "flow_rate");
-            let totalReadingFieldKey = deviceDoc.data().meter_reading_field ||
-                Object.keys(fieldMapping).find(k => fieldMapping[k] === "current_reading");
-
-            // Smart-Scan: If fields are missing/zero in DB, find them in the data
-            if (feeds.length > 0) {
-                const latestFeed = getLatestFeed(feeds);
-
-                if (!totalReadingFieldKey || !latestFeed[totalReadingFieldKey]) {
-                    // Find largest number (likely the totalizer)
-                    let maxVal = -1;
-                    for (let i = 1; i <= 8; i++) {
-                        const val = parseFloat(latestFeed[`field${i}`]);
-                        if (!isNaN(val) && val > maxVal) {
-                            maxVal = val;
-                            totalReadingFieldKey = `field${i}`;
-                        }
-                    }
-                }
-
-                if (!flowRateFieldKey || !latestFeed[flowRateFieldKey]) {
-                    // Find first realistic non-zero flow rate (usually field 3 or 4)
-                    for (const f of ["field3", "field4", "field1", "field2"]) {
-                        const val = parseFloat(latestFeed[f]);
-                        if (!isNaN(val) && val > 0 && val < 1000 && f !== totalReadingFieldKey) {
-                            flowRateFieldKey = f;
-                            break;
-                        }
-                    }
-                }
-
-                // Final fallbacks
-                if (!flowRateFieldKey) flowRateFieldKey = "field4";
-                if (!totalReadingFieldKey) totalReadingFieldKey = "field5";
-
-                const lastUpdatedAt = latestFeed.created_at;
-                const status = deviceState.calculateDeviceStatus(lastUpdatedAt);
-
-                const flowResult = {
-                    node_id: req.params.id,
-                    status,
-                    lastUpdatedAt,
-                    // Return the mapping so frontend knows what we used
-                    active_fields: {
-                        flow_rate: flowRateFieldKey,
-                        total_liters: totalReadingFieldKey
-                    },
-                    flow_rate: parseFloat(latestFeed[flowRateFieldKey]) || 0,
-                    total_liters: parseFloat(latestFeed[totalReadingFieldKey]) || 0,
-                    history: feeds.map(f => ({
-                        timestamp: normalizeThingSpeakTimestamp(f.created_at),
-                        flow_rate: parseFloat(f[flowRateFieldKey]) || 0,
-                        total_liters: parseFloat(f[totalReadingFieldKey]) || 0
-                    }))
-                };
-
-                syncNodeStatus(deviceDoc.id, type, lastUpdatedAt, {
-                    flow_rate: flowResult.flow_rate,
-                    total_liters: flowResult.total_liters,
-                    status
-                }).catch(err => console.error("Sync error:", err));
-
-                await cache.set(analyticsCacheKey, flowResult, 300);
-                return res.status(200).json(flowResult);
-            }
-            return res.status(200).json({ node_id: req.params.id, status: "Offline", history: [] });
-        }
-
-        // --- TANK & DEEP WELL ANALYTICS PIPELINE ---
-        let rawHistory = feeds.map(feed => {
-            const distance = parseFloat(feed[fieldKey]);
-            if (isNaN(distance)) return null;
-
-            const validDistance = Math.min(distance / 100, depth);
-            const waterHeight = Math.max(0, depth - validDistance);
-            const levelPercent = Math.min(100, (waterHeight / depth) * 100);
-            const volume = (capacity * levelPercent) / 100;
-
-            return {
-                timestamp: normalizeThingSpeakTimestamp(feed.created_at),
-                level: levelPercent,
-                volume,
-                raw: feed,
-            };
-        }).filter(Boolean);
-
-        const history = rawHistory.map((point, index, arr) => {
-            if (index === 0 || index === arr.length - 1) return point;
-            const prev = arr[index - 1];
-            const next = arr[index + 1];
-            const smoothedLevel = (prev.level + point.level + next.level) / 3;
-            const smoothedVolume = (prev.volume + point.volume + next.volume) / 3;
-
-            let finalLevel = point.level;
-            let finalVolume = point.volume;
-
-            if (Math.abs(point.level - smoothedLevel) > 20) {
-                finalLevel = smoothedLevel;
-                finalVolume = smoothedVolume;
-            } else {
-                finalLevel = (point.level * 0.7) + (smoothedLevel * 0.3);
-                finalVolume = (point.volume * 0.7) + (smoothedVolume * 0.3);
-            }
-
-            return {
-                ...point,
-                level: Number(finalLevel.toFixed(2)),
-                volume: Number(finalVolume.toFixed(2))
-            };
-        });
-
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-        const startOf2DaysAgo = new Date(startOfYesterday);
-        startOf2DaysAgo.setDate(startOf2DaysAgo.getDate() - 1);
-
-        const todayReadings = history.filter(h => new Date(h.timestamp) >= startOfToday);
-        const yesterdayReadings = history.filter(h => new Date(h.timestamp) >= startOfYesterday && new Date(h.timestamp) < startOfToday);
-        const prevReadings = history.filter(h => new Date(h.timestamp) >= startOf2DaysAgo && new Date(h.timestamp) < startOfYesterday);
-
-        let refillsToday = 0;
-        let lastRefillTime = "--";
-        let totalRefillDuration = 0;
-        let refillCount = 0;
-        let activeRefillStart = null;
-        let refillTimeline = [];
-        const REFILL_THRESHOLD = capacity * 0.02;
-
-        for (let i = 1; i < history.length; i++) {
-            const prev = history[i - 1];
-            const curr = history[i];
-            const volChange = curr.volume - prev.volume;
-            const isToday = new Date(curr.timestamp) >= startOfToday;
-
-            if (volChange > REFILL_THRESHOLD && !activeRefillStart) {
-                activeRefillStart = new Date(curr.timestamp);
-            } else if (volChange <= 0 && activeRefillStart) {
-                const end = new Date(curr.timestamp);
-                const duration = (end - activeRefillStart) / 60000;
-                if (duration > 1) {
-                    refillCount++;
-                    totalRefillDuration += duration;
-                    if (isToday) {
-                        refillsToday++;
-                        const d = activeRefillStart;
-                        lastRefillTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                    }
-                }
-                activeRefillStart = null;
-            }
-
-            if (isToday && i % 20 === 0) {
-                refillTimeline.push(volChange > REFILL_THRESHOLD ? 1 : 0);
-            }
-        }
-
-        const calculateConsumption = (readings) => {
-            if (readings.length < 2) return 0;
-            let total = 0;
-            for (let i = 1; i < readings.length; i++) {
-                const diff = readings[i - 1].volume - readings[i].volume;
-                if (diff > 0) total += diff;
-            }
-            return total;
-        };
-
-        // Formula-Based Analytics Engine with Preprocessing & Smoothing
-        const totalCapacity = capacity || 0;
-        const tankDepth = depth || 1.2;
-
-        // 1. Preprocessing: Filter noise and calculate raw volume
-        let processedHistory = feeds.map((f) => {
-            const raw = parseFloat(f[fieldKey]);
-            if (isNaN(raw)) return null;
-
-            // Outlier rejection (e.g. ignore 0 or values > 2x depth as sensor errors)
-            if (raw <= 0 || (raw / 100) > (tankDepth * 2)) return null;
-
-            const dist = Math.min(raw / 100, tankDepth);
-            const height = Math.max(0, tankDepth - dist);
-            const levelPct = Math.round(Math.min(100, (height / tankDepth) * 100) * 100) / 100;
-            const volume = Math.round(((levelPct * totalCapacity) / 100) * 100) / 100;
-
-            return {
-                timestamp: normalizeThingSpeakTimestamp(f.created_at),
-                level: levelPct,
-                volume: volume
-            };
-        }).filter(Boolean);
-
-        // 2. Smoothing: Moving Average Rate Calculation (10-point window)
-        let fillRateLpm = 0;
-        let drainRateLpm = 0;
-        let events = [];
-
-        if (processedHistory.length >= 10) {
-            const windowSize = 10;
-            const latestWindow = processedHistory.slice(-windowSize);
-            const firstOfWindow = latestWindow[0];
-            const lastOfWindow = latestWindow[latestWindow.length - 1];
-
-            const dtMin = (new Date(lastOfWindow.timestamp) - new Date(firstOfWindow.timestamp)) / 60000;
-            const dvL = lastOfWindow.volume - firstOfWindow.volume;
-
-            if (dtMin > 2 && dtMin < 120) { // Valid window (2min - 2hrs)
-                const smoothedRate = dvL / dtMin;
-                // Dead-zone to avoid jitter at ±0.5 L/min
-                if (smoothedRate > 0.8) fillRateLpm = Math.round(smoothedRate * 10) / 10;
-                else if (smoothedRate < -0.8) drainRateLpm = Math.round(Math.abs(smoothedRate) * 10) / 10;
-            }
-
-            // 3. Timeline Generation (Using smoothed windows)
-            for (let i = 15; i < processedHistory.length; i += 15) {
-                const w1 = processedHistory[i - 15];
-                const w2 = processedHistory[i];
-                const dt = (new Date(w2.timestamp) - new Date(w1.timestamp)) / 60000;
-                const dv = w2.volume - w1.volume;
-                const r = dv / dt;
-
-                if (dt > 5) {
-                    if (r > 3) events.push({ time: new Date(w2.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), label: 'REFILL', color: '#34C759' });
-                    else if (r < -3) events.push({ time: new Date(w2.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), label: 'PEAK USE', color: '#FF3B30' });
-                }
-            }
-        }
-
-        const latestPoint = processedHistory[processedHistory.length - 1] || { level: 0, volume: 0, timestamp: null };
-        const status = deviceState.calculateDeviceStatus(latestPoint.timestamp);
-
-        // 4. Steady Prediction (Only if rate is sustained)
-        const remainingCap = totalCapacity - latestPoint.volume;
-        const timeToFull = fillRateLpm > 1 ? Math.round(remainingCap / fillRateLpm) : null;
-        const timeToEmpty = drainRateLpm > 1 ? Math.round(latestPoint.volume / drainRateLpm) : null;
-
-        const tankResult = {
-            node_id: req.params.id,
-            status,
-            lastUpdatedAt: latestPoint.timestamp,
-            currentLevel: latestPoint.level,
-            currentVolume: latestPoint.volume,
-            remainingCapacity: Math.round(remainingCap),
-            history: processedHistory,
-            tankBehavior: {
-                fillRateLpm,
-                drainRateLpm,
-                timeToFull,
-                timeToEmpty,
-                eventTimeline: events.length > 0 ? events.slice(-5) : []
-            }
-        };
-
-        // Sync to Firestore
-        syncNodeStatus(deviceDoc.id, type, latestPoint.timestamp, {
-            percentage: latestPoint.level,
-            volume: latestPoint.volume,
-            status
-        }).catch(err => console.error("Tank Sync Error:", err));
-
-        await cache.set(analyticsCacheKey, tankResult, 300);
-        return res.status(200).json(tankResult);
-    } catch (error) {
-        console.error("Tank Engine Error:", error);
-        res.status(500).json({ error: "Tank analytics calculation failure" });
+    // ── Cache ──────────────────────────────────────────────────────────────
+    const analyticsCacheKey = `analytics_${deviceDoc.id}_${range || '24H'}_${startDate || ''}_${endDate || ''}`;
+    const cachedAnalytics = await cache.get(analyticsCacheKey);
+    if (cachedAnalytics) {
+      console.log(`[NodesController] Serving cached analytics for ${deviceDoc.id}`);
+      return res.status(200).json(cachedAnalytics);
     }
+
+    // ── Build Dynamic ThingSpeak URL ──────────────────────────────────────
+    let thingspeakUrl;
+    if (range === '1W') {
+      thingspeakUrl = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&days=7&results=8000`;
+    } else if (range === '1M') {
+      thingspeakUrl = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&days=31&results=8000`;
+    } else if (startDate && endDate) {
+      thingspeakUrl = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&start=${startDate}&end=${endDate}&results=8000`;
+    } else {
+      // default 24H - fetching 480 points to cover the last 8 hours (at 1-min intervals)
+      thingspeakUrl = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&results=480`;
+    }
+
+    const response = await axios.get(thingspeakUrl);
+    const feeds = response.data.feeds || [];
+
+    if (feeds.length === 0) {
+      return res.status(200).json({
+        node_id: req.params.id,
+        status: "NO_DATA",
+        history: [],
+        tankBehavior: null,
+      });
+    }
+
+    // ── Resolve field key ──────────────────────────────────────────────────
+    const sampleFeed = feeds[0] || {};
+    const definedField =
+      metadata.secondary_field || metadata.water_level_field ||
+      metadata.fieldKey || metadata.configuration?.water_level_field ||
+      metadata.configuration?.fieldKey;
+    const fieldKey =
+      fieldMapping.levelField || definedField ||
+      Object.keys(fieldMapping).find(k => fieldMapping[k] && fieldMapping[k].includes("water_level")) ||
+      (sampleFeed.field1 !== undefined ? "field1" : "field2");
+
+    // ── FLOW METER path (unchanged) ────────────────────────────────────────
+    if (["evaraflow", "flow", "flow_meter"].includes(type)) {
+      const flowKeys = ['flowField', 'flow_rate', 'flow_rate_field'];
+      const totalKeys = ['volumeField', 'current_reading', 'total_reading', 'meter_reading_field'];
+
+      let flowRateFieldKey =
+        deviceDoc.data().flow_rate_field ||
+        Object.keys(fieldMapping).find(k => flowKeys.includes(fieldMapping[k])) ||
+        "field4";
+
+      let totalReadingFieldKey =
+        deviceDoc.data().meter_reading_field ||
+        Object.keys(fieldMapping).find(k => totalKeys.includes(fieldMapping[k])) ||
+        "field5";
+
+      if (feeds.length > 0) {
+        const latestFeed = getLatestFeed(feeds);
+        if (!totalReadingFieldKey || !latestFeed[totalReadingFieldKey]) {
+          let maxVal = -1;
+          for (let i = 1; i <= 8; i++) {
+            const val = parseFloat(latestFeed[`field${i}`]);
+            if (!isNaN(val) && val > maxVal) {
+              maxVal = val;
+              totalReadingFieldKey = `field${i}`;
+            }
+          }
+        }
+        if (!flowRateFieldKey || !latestFeed[flowRateFieldKey]) {
+          for (const f of ["field3", "field4", "field1", "field2"]) {
+            const val = parseFloat(latestFeed[f]);
+            if (!isNaN(val) && val > 0 && val < 1000 && f !== totalReadingFieldKey) {
+              flowRateFieldKey = f;
+              break;
+            }
+          }
+        }
+        if (!flowRateFieldKey) flowRateFieldKey = "field4";
+        if (!totalReadingFieldKey) totalReadingFieldKey = "field5";
+
+        const lastUpdatedAt = latestFeed.created_at;
+        const status = deviceState.calculateDeviceStatus(lastUpdatedAt);
+
+        const flowResult = {
+          node_id: req.params.id,
+          status,
+          lastUpdatedAt,
+          active_fields: { flow_rate: flowRateFieldKey, total_liters: totalReadingFieldKey },
+          flow_rate: parseFloat(latestFeed[flowRateFieldKey]) || 0,
+          total_liters: parseFloat(latestFeed[totalReadingFieldKey]) || 0,
+          history: feeds.map(f => ({
+            timestamp: normalizeThingSpeakTimestamp(f.created_at),
+            flow_rate: parseFloat(f[flowRateFieldKey]) || 0,
+            total_liters: parseFloat(f[totalReadingFieldKey]) || 0
+          }))
+        };
+
+        syncNodeStatus(deviceDoc.id, type, lastUpdatedAt, {
+          flow_rate: flowResult.flow_rate,
+          total_liters: flowResult.total_liters,
+          status
+        }).catch(err => console.error("Sync error:", err));
+
+        await cache.set(analyticsCacheKey, flowResult, 300);
+        return res.status(200).json(flowResult);
+      }
+      return res.status(200).json({ node_id: req.params.id, status: "Offline", history: [] });
+    }
+
+
+    // ── TANK path — NEW: use analytics engine ──────────────────────────────
+
+    // Build readings array for engine (clean format)
+    const readings = feeds
+      .map(f => {
+        const distCm = parseFloat(f[fieldKey]);
+        const tsMs = new Date(f.created_at).getTime();
+        if (isNaN(distCm) || isNaN(tsMs)) return null;
+        return { distanceCm: distCm, timestampMs: tsMs };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.timestampMs - b.timestampMs);
+
+    // Load saved thresholds (null on first run)
+    const savedThresholds = await deviceState.loadSavedThresholds(deviceDoc.id);
+
+    // Run the analytics engine — THIS is the 200-reading window classification
+    const analytics = analyzeWaterTank(
+      readings,
+      { depthM: depth, capacityLitres: capacity },
+      savedThresholds
+    );
+
+    // Save thresholds if engine requests it
+    if (analytics.shouldSaveThresholds && analytics.thresholds.learned) {
+      await deviceState.saveThresholds(deviceDoc.id, analytics.thresholds);
+    }
+
+    // Build history for frontend chart
+    const processedHistory = feeds.map(f => {
+      const raw = parseFloat(f[fieldKey]);
+      if (isNaN(raw)) return null;
+
+      const dist = Math.min(raw / 100, depth);
+      const height = Math.max(0, depth - dist);
+      const level = Math.min(100, (height / depth) * 100);
+      const volume = (capacity * level) / 100;
+
+      return {
+        level_percentage: level,
+        level,
+        volume,
+        timestamp: normalizeThingSpeakTimestamp(f.created_at)
+      };
+    }).filter(Boolean);
+
+    const latestPoint = processedHistory[processedHistory.length - 1] || { level: 0, volume: 0, timestamp: null };
+    const status = deviceState.calculateDeviceStatus(latestPoint.timestamp);
+
+    // Build tankBehavior using engine output
+    const tankBehavior = {
+      waterState: analytics.state,
+      deltaCm: analytics.deltaCm,
+      fillRateLpm:  analytics.state === 'REFILL'      ? analytics.rateLitresPerMin : 0,
+      drainRateLpm: analytics.state === 'CONSUMPTION' ? analytics.rateLitresPerMin : 0,
+      timeToFull:  analytics.estMinutesToFull,
+      timeToEmpty: analytics.estMinutesToEmpty,
+      consumedTodayLitres: analytics.consumedTodayLitres,
+      refilledTodayLitres: analytics.refilledTodayLitres,
+      thresholdsLearned: analytics.thresholds.learned,
+      thresholdLower: analytics.thresholds.lower,
+      thresholdUpper: analytics.thresholds.upper,
+      eventTimeline: buildEventTimeline(processedHistory, analytics.state),
+    };
+
+    const tankResult = {
+      node_id: req.params.id,
+      status,
+      lastUpdatedAt: latestPoint.timestamp,
+      currentLevel: latestPoint.level,
+      currentVolume: latestPoint.volume,
+      level_percentage: latestPoint.level,
+      remainingCapacity: Math.round(capacity - latestPoint.volume),
+      history: processedHistory,
+      tankBehavior,
+    };
+
+    // Update Firebase
+    await db.collection(type).doc(deviceDoc.id).update({
+      level_percentage: latestPoint.level,
+      currentVolume: latestPoint.volume,
+      waterState: analytics.state,
+    }).catch(err => console.error("Metadata update error:", err));
+
+    await cache.set(analyticsCacheKey, tankResult, 300);
+    return res.status(200).json(tankResult);
+
+  } catch (error) {
+    console.error("Tank Engine Error:", error);
+    res.status(500).json({ error: "Tank analytics calculation failure" });
+  }
 };

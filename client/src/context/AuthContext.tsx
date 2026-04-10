@@ -32,6 +32,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
+  role: UserRole | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   login: (
     email: string,
@@ -53,63 +54,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Extract user metadata from Firestore profile
+  // Extract user metadata from API response
   const extractUser = useCallback(
-    (firebaseUser: FirebaseUser, profile?: any): User => {
-      // Support both 'display_name' and 'full_name' field names
-      const displayName =
-        profile?.display_name ||
-        profile?.full_name ||
-        firebaseUser.displayName ||
-        firebaseUser.email?.split("@")[0] ||
-        "User";
-
-      // Normalize role: trim whitespace and collapse "super admin" → "superadmin"
-      // This handles the known Firestore typo without hardcoding any user
-      let rawRole = (profile?.role as string) || "customer";
-      const role: UserRole = rawRole
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "") as UserRole;
-
-
+    (apiResponse: any): User => {
+      // Trust the backend API response completely - it has verified the role
       return {
-        id: firebaseUser.uid,
-        email: firebaseUser.email || "",
-        displayName,
-        role,
-        plan: (profile?.plan as UserPlan) || "pro",
-        community_id: profile?.community_id,
+        id: apiResponse.id,
+        email: apiResponse.email || "",
+        displayName: apiResponse.displayName || "User",
+        role: apiResponse.role as UserRole,
+        plan: (apiResponse.plan as UserPlan) || "pro",
+        community_id: apiResponse.community_id,
       };
     },
     [],
   );
 
+  /**
+   * Fetch user profile from backend API
+   * Backend has permissions to read from Firestore and determine correct role
+   */
   const fetchProfile = useCallback(
     async (firebaseUser: FirebaseUser) => {
       try {
-        let profileData = null;
-        const superadminRef = doc(db, "superadmins", firebaseUser.uid);
-        const superadminSnap = await getDoc(superadminRef);
+        console.log("[AuthContext] Starting profile fetch for:", firebaseUser.email);
+        
+        // Get ID token
+        const idToken = await firebaseUser.getIdToken();
+        
+        // Call backend API to get profile with verified role
+        const response = await fetch("/api/v1/auth/me", {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${idToken}`,
+            "Content-Type": "application/json",
+          },
+        });
 
-        if (superadminSnap.exists()) {
-          profileData = superadminSnap.data();
-        } else {
-          const customerRef = doc(db, "customers", firebaseUser.uid);
-          const customerSnap = await getDoc(customerRef);
-          if (customerSnap.exists()) {
-            profileData = customerSnap.data();
-          }
+        if (!response.ok) {
+          console.error("[AuthContext] Failed to fetch profile:", response.status, response.statusText);
+          setUser(null);
+          setLoading(false);
+          return;
         }
 
-        if (profileData) {
-          setUser(extractUser(firebaseUser, profileData));
+        const data = await response.json();
+        
+        if (data.success && data.user) {
+          console.log(`[AuthContext] ✅ Profile fetched - role: ${data.user.role}`);
+          setUser(extractUser(data.user));
         } else {
-          setUser(extractUser(firebaseUser));
+          console.error("[AuthContext] Invalid response from backend:", data);
+          setUser(null);
         }
       } catch (err) {
         console.error("[AuthContext] Error fetching profile:", err);
-        setUser(extractUser(firebaseUser));
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -140,37 +140,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     ): Promise<{ success: boolean; user?: User; error?: string }> => {
       setLoading(true);
       try {
+        // Step 1: Firebase authentication
         const credential = await signInWithEmailAndPassword(
           auth,
           email,
           password,
         );
 
-        if (credential.user) {
-          let profileData = null;
-          const superadminRef = doc(db, "superadmins", credential.user.uid);
-          const superadminSnap = await getDoc(superadminRef);
+        if (!credential.user) {
+          setLoading(false);
+          return { success: false, error: "Login failed" };
+        }
 
-          if (superadminSnap.exists()) {
-            profileData = superadminSnap.data();
-          } else {
-            const customerRef = doc(db, "customers", credential.user.uid);
-            const customerSnap = await getDoc(customerRef);
-            if (customerSnap.exists()) {
-              profileData = customerSnap.data();
-            }
-          }
+        // Step 2: Get ID token
+        const idToken = await credential.user.getIdToken();
 
-          const finalUser = extractUser(credential.user, profileData);
+        // Step 3: Verify token with backend and get profile
+        console.log("[AuthContext] Verifying token with backend...");
+        const response = await fetch("/api/v1/auth/verify-token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ idToken }),
+        });
 
+        if (!response.ok) {
+          console.error("[AuthContext] Token verification failed:", response.status);
+          setLoading(false);
+          return { success: false, error: "Token verification failed" };
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.user) {
+          const finalUser = extractUser(data.user);
+          console.log(`[AuthContext] ✅ Login successful - role: ${finalUser.role}`);
           setUser(finalUser);
           setLoading(false);
           return { success: true, user: finalUser };
         }
 
+        console.error("[AuthContext] Invalid response from backend:", data);
         setLoading(false);
-        return { success: false, error: "Login failed" };
+        return { success: false, error: "Invalid response from server" };
       } catch (err: any) {
+        console.error("[AuthContext] Login error:", err);
         setLoading(false);
         return {
           success: false,
@@ -234,6 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         user,
         isAuthenticated: !!user,
         loading,
+        role: user?.role || null,
         setUser,
         login,
         signup,

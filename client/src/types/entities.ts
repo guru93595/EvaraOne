@@ -52,7 +52,7 @@ export interface Customer {
   display_name: string;
   full_name?: string;
   phone_number?: string;
-  role: 'customer' | 'admin' | 'superadmin';
+  role: 'customer' | 'admin' | 'superadmin' | 'distributor' | 'operator' | 'viewer';
   community_id?: string;
   zone_id?: string;
   regionFilter?: string;
