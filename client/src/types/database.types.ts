@@ -939,11 +939,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      analytics_type: ["EvaraTank", "EvaraDeep", "EvaraFlow"],
-      device_category: ["EvaraTank", "EvaraDeep", "EvaraFlow"],
-      device_classification: ["EvaraTank", "EvaraDeep", "EvaraFlow"],
-      node_asset_type: ["tank", "sump", "borewell", "well", "flow_meter"],
-      node_category: ["OHT", "Sump", "Borewell", "GovtBorewell", "PumpHouse"],
+      analytics_type: ["EvaraTank", "EvaraDeep", "EvaraFlow", "EvaraTDS"],
+      device_category: ["EvaraTank", "EvaraDeep", "EvaraFlow", "EvaraTDS"],
+      device_classification: ["EvaraTank", "EvaraDeep", "EvaraFlow", "EvaraTDS"],
+      node_asset_type: ["tank", "sump", "borewell", "well", "flow_meter", "tds_sensor"],
+      node_category: ["OHT", "Sump", "Borewell", "GovtBorewell", "PumpHouse", "TDSSensor"],
       period_type: ["hourly", "daily", "weekly", "monthly"],
       user_plan: ["base", "plus", "pro"],
       user_role: ["superadmin", "distributor", "customer"],

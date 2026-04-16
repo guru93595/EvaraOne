@@ -1,5 +1,17 @@
 const { z } = require("zod");
 
+// ─── #7 FIX: Remove .passthrough() from all schemas ──────────────────────────
+// ORIGINAL BUG: updateNodeSchema had .passthrough() at the end of the body
+// object definition. With .passthrough(), ANY key not in the schema was silently
+// forwarded to the parsed output — including:
+//   { "__proto__": { "admin": true } }   ← prototype pollution
+//   { "role_override": "superadmin" }    ← field injection
+//   { "$where": "javascript expression"} ← NoSQL injection pattern
+//
+// FIX: With .passthrough() removed, Zod STRIPS unknown keys by default (.strip()
+// is Zod's default mode). The controller only receives exactly the fields listed
+// below — nothing else reaches Firestore.
+
 exports.createNodeSchema = z.object({
   body: z.object({
     id: z.string().optional(),
@@ -82,7 +94,8 @@ exports.updateNodeSchema = z.object({
     status: z.string().optional(),
     tank_shape: z.string().optional(),
     temperature_field: z.string().optional(),
-  }).passthrough()
+  })
+  // ✅ NO passthrough() — Zod strips unknown keys by default
 });
 
 exports.createZoneSchema = z.object({
@@ -101,4 +114,18 @@ exports.createCustomerSchema = z.object({
         email: z.string().email().optional(),
         phone: z.string().optional()
     })
+});
+
+// ─── #10 FIX: Query parameter validation schema ────────────────────────────────
+// ORIGINAL BUG: GET /zones had no validation at all.
+// curl '…/zones?limit=999999' would hit Firestore with a 999999-document query,
+// causing memory exhaustion and a potential OOM crash.
+//
+// FIX: Every route — including GETs — runs through validateRequest().
+// This caps `limit` at 100 and validates `cursor` length.
+exports.listQuerySchema = z.object({
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().max(256).optional()
+  })
 });

@@ -1068,7 +1068,7 @@ export type NodeCategory =
   | "GovtBorewell"
   | "PumpHouse"
   | "FlowMeter";
-export type AnalyticsType = "EvaraTank" | "EvaraDeep" | "EvaraFlow";
+export type AnalyticsType = "EvaraTank" | "EvaraDeep" | "EvaraFlow" | "EvaraTDS";
 
 // Stub types for tables that are not yet in the schema but referenced in the codebase
 export interface AlertRule {

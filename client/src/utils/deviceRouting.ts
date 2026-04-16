@@ -30,6 +30,7 @@ export function getDeviceAnalyticsRoute(device: Device): string {
     if (template.includes('tank')) return `/evaratank/${hId}`;
     if (template.includes('deep')) return `/evaradeep/${hId}`;
     if (template.includes('flow')) return `/evaraflow/${hId}`;
+    if (template.includes('tds')) return `/evaratds/${hId}`;
   }
 
   // 2. Fall back to device_type
@@ -52,6 +53,8 @@ export function getDeviceAnalyticsRoute(device: Device): string {
       return `/evaradeep/${hId}`;
     if (asset.includes('flow') || asset.includes('pump') || asset.includes('meter'))
       return `/evaraflow/${hId}`;
+    if (asset.includes('tds'))
+      return `/evaratds/${hId}`;
   }
 
   // Default fallback to node details page (uses Firestore original ID)

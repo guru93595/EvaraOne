@@ -15,18 +15,14 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-async function verify() {
-    const ids = ['pBRE2M84H9vypGTENvrr', 's1AmJoDdAFIzMMFYMaZe', 'qG6sM6N7B7vypGTENvrr'];
+async function test() {
     try {
-        for (const id of ids) {
-            const doc = await db.collection('devices').doc(id).get();
-            if (doc.exists) {
-                const d = doc.data();
-                console.log(`ID: ${id} | Visible: ${d.isVisibleToCustomer} | CID: '${d.customer_id}' | Type: ${d.device_type}`);
-            } else {
-                console.log(`ID: ${id} | DOES NOT EXIST`);
-            }
-        }
+        const s = await db.collection("devices").where("device_type", "==", "evaratds").get();
+        console.log(`Found ${s.size} TDS devices:`);
+        s.forEach(d => {
+            const data = d.data();
+            console.log(`DocID: ${d.id} | device_id: ${data.device_id} | node_id: ${data.node_id} | label: ${data.label || data.displayName}`);
+        });
         process.exit(0);
     } catch (err) {
         console.error(err);
@@ -34,4 +30,4 @@ async function verify() {
     }
 }
 
-verify();
+test();

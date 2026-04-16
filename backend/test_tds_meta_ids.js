@@ -15,13 +15,12 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-async function listAll() {
+async function test() {
     try {
-        const snapshot = await db.collection("devices").get();
-        console.log("TOTAL_DEVICES_IN_DB:", snapshot.size);
-        snapshot.forEach(doc => {
-            const d = doc.data();
-            console.log(`ID: ${doc.id} | NAME: ${d.name} | DEVICE_ID: ${d.device_id} | CUSTOMER: ${d.customer_id}`);
+        const s = await db.collection("evaratds").get();
+        console.log(`Found ${s.size} entries in evaratds collection:`);
+        s.forEach(d => {
+            console.log(`DocID: ${d.id}`);
         });
         process.exit(0);
     } catch (err) {
@@ -30,4 +29,4 @@ async function listAll() {
     }
 }
 
-listAll();
+test();

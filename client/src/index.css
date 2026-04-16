@@ -41,7 +41,7 @@
 
   /* Golden Ratio Spacing (Requested Scaling) */
   --dashboard-heading: #1e3a8a;
-  --liquid-button-text: #000000;
+  --liquid-button-text: #ffffff;
   --ratio-13: 13px;
   --ratio-21: 21px;
   --ratio-34: 34px;
@@ -63,6 +63,15 @@
   --map-index-text: #0f172a;
   --map-index-text-muted: #475569;
   --map-index-border: #e2e8f0;
+
+  /* Legend Glassmorphism */
+  --legend-bg: rgba(255, 255, 255, 0.6);
+  --legend-border: rgba(255, 255, 255, 0.8);
+  --legend-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --legend-heading-color: #1e293b;
+  --legend-text-color: #334155;
+  --legend-icon-bg: rgba(255, 255, 255, 0.8);
+  --legend-divider: rgba(0, 0, 0, 0.06);
 
   /* Dashboard Icons */
   --icon-stroke: #002868;
@@ -119,6 +128,28 @@
   --zone-badge-text: #1d4ed8;
   --zone-badge-border: rgba(37, 99, 235, 0.4);
   --zone-badge-icon: #2563eb;
+
+  /* Navbar Glassmorphism */
+  --navbar-bg: rgba(240, 247, 255, 0.3);
+  --navbar-border: rgba(255, 255, 255, 0.5);
+  --navbar-shadow: 0 10px 25px rgba(37, 99, 235, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  --navbar-text: #1e3a8a;
+  --navbar-active-bg: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  --navbar-active-text: #ffffff;
+  --navbar-active-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+
+  /* Modal Vars */
+  --modal-glass-bg: rgba(255, 255, 255, 0.55);
+  --modal-glass-border: rgba(255, 255, 255, 0.6);
+  --modal-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --modal-card-glass-bg: rgba(255, 255, 255, 0.45);
+  --modal-card-glass-border: rgba(255, 255, 255, 0.5);
+  --modal-input-bg: #ffffff;
+  --modal-input-border: rgba(0,0,0,0.15);
+  --modal-label-color: #1e293b;
+  --modal-heading-color: #0f172a;
+  --modal-placeholder-color: rgba(0,0,0,0.35);
+  --modal-text-color: #1e293b;
 }
 
 .dark {
@@ -194,6 +225,62 @@ html.dark {
   --zone-badge-text: #60a5fa;
   --zone-badge-border: rgba(96, 165, 250, 0.4);
   --zone-badge-icon: #60a5fa;
+
+  /* Legend Glassmorphism */
+  --legend-bg: rgba(15, 23, 42, 0.6);
+  --legend-border: rgba(255, 255, 255, 0.08);
+  --legend-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --legend-heading-color: #f1f5f9;
+  --legend-text-color: #cbd5e1;
+  --legend-icon-bg: rgba(255, 255, 255, 0.05);
+  --legend-divider: rgba(255, 255, 255, 0.06);
+
+  /* Navbar Glassmorphism */
+  --navbar-bg: rgba(15, 23, 42, 0.35);
+  --navbar-border: rgba(255, 255, 255, 0.15);
+  --navbar-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --navbar-text: #e0f2fe;
+  --navbar-active-bg: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  --navbar-active-text: #ffffff;
+  --navbar-active-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+
+  /* Modal Vars */
+  --modal-glass-bg: rgba(13, 17, 23, 0.65);
+  --modal-glass-border: rgba(255, 255, 255, 0.08);
+  --modal-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --modal-card-glass-bg: rgba(255, 255, 255, 0.04);
+  --modal-card-glass-border: rgba(255, 255, 255, 0.08);
+  --modal-input-bg: rgba(255,255,255,0.06);
+  --modal-input-border: rgba(255,255,255,0.12);
+  --modal-label-color: rgba(255,255,255,0.85);
+  --modal-heading-color: #ffffff;
+  --modal-placeholder-color: rgba(255,255,255,0.3);
+  --modal-text-color: #ffffff;
+}
+
+.modal-glass {
+  background: var(--modal-glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--modal-glass-border);
+  box-shadow: var(--modal-glass-shadow);
+}
+
+.modal-card-glass {
+  background: var(--modal-card-glass-bg);
+  border: 1px solid var(--modal-card-glass-border);
+}
+
+/* Fix browser autofill background override in dark mode modal inputs */
+html.dark .modal-card-glass input:-webkit-autofill,
+html.dark .modal-card-glass input:-webkit-autofill:hover,
+html.dark .modal-card-glass input:-webkit-autofill:focus,
+.dark .modal-card-glass input:-webkit-autofill,
+.dark .modal-card-glass input:-webkit-autofill:hover,
+.dark .modal-card-glass input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px rgba(255, 255, 255, 0.06) inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
 }
 
 .node-label { color: var(--node-label-color); }
@@ -274,6 +361,75 @@ html.dark .device-type-badge {
   background-color: var(--device-type-badge-bg);
   color: var(--device-type-badge-text);
   border: 1px solid var(--device-type-badge-border);
+}
+
+/* Legend Utility Classes */
+.map-legend-panel {
+  background: var(--legend-bg);
+  border: 1px solid var(--legend-border) !important;
+  box-shadow: var(--legend-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 20px;
+}
+.legend-heading {
+  color: var(--legend-heading-color) !important;
+  font-weight: 800;
+}
+.legend-text {
+  color: var(--legend-text-color) !important;
+}
+.legend-icon-bg {
+  background: var(--legend-icon-bg) !important;
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.legend-divider {
+  border-color: var(--legend-divider) !important;
+}
+
+/* ── Google Maps High-Fidelity Dark Theme ── */
+/* Custom tuned for CARTO Voyager Dark: Deep navy land, Teal water, Green parks, and Bright roads */
+html.dark .leaflet-tile-pane {
+  filter: 
+    saturate(3) 
+    brightness(0.85) 
+    contrast(1.2) 
+    hue-rotate(10deg);
+}
+
+html.dark .leaflet-map-pane {
+  background-color: #0d1117;
+}
+
+/* Navbar Utility Classes */
+.navbar-glass {
+  background: var(--navbar-bg) !important;
+  border: 1px solid var(--navbar-border) !important;
+  box-shadow: var(--navbar-shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 999px;
+  margin: 12px 24px;
+  padding: 8px 20px;
+}
+.navbar-text {
+  color: var(--navbar-text) !important;
+}
+.navbar-active {
+  background: var(--navbar-active-bg) !important;
+  color: var(--navbar-active-text) !important;
+  box-shadow: var(--navbar-active-shadow);
+  border-radius: 999px;
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(-1px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dark, [data-theme="dark"], :root[data-theme="dark"] {
@@ -908,9 +1064,6 @@ body {
 /* Hover Physics */
 .apple-glass-card:hover {
   transform: translateY(-2px) scale(1.005);
-  background: rgba(255, 255, 255, 0.35);
-  /* Brighten on hover */
-  border-color: rgba(255, 255, 255, 0.8);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
@@ -1207,4 +1360,23 @@ a:active {
 .dark .leaflet-control-zoom-out,
 [data-theme="dark"] .leaflet-control-zoom-out {
   border-bottom: none !important;
+}
+
+/* ── TDS Meter Water Animation Keyframes ─────────────────────────────── */
+@keyframes tdsWave {
+  0%   { transform: translateX(0) translateZ(0) scaleY(1); }
+  50%  { transform: translateX(-25%) translateZ(0) scaleY(1.3); }
+  100% { transform: translateX(-50%) translateZ(0) scaleY(1); }
+}
+
+@keyframes tdsShine {
+  0%   { opacity: 0.2; transform: translateX(-100%) skewX(-30deg); }
+  50%  { opacity: 0.8; }
+  100% { opacity: 0.2; transform: translateX(200%) skewX(-30deg); }
+}
+
+@keyframes tdsRipple {
+  0%   { opacity: 0.7; transform: translateX(-50%) scaleX(1)   scaleY(1);   }
+  50%  { opacity: 0.4; transform: translateX(-50%) scaleX(1.3) scaleY(1.5); }
+  100% { opacity: 0.7; transform: translateX(-50%) scaleX(1)   scaleY(1);   }
 }

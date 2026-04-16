@@ -5,6 +5,15 @@ const { fetchSixHourData } = require("../services/thingspeakService.js");
 const deviceState = require("../services/deviceStateService.js");
 const { startStatusCron } = require("./deviceStatusCron.js");
 
+// ─── #17 FIX: MQTT Message Deduplication ──────────────────────────────────
+// ORIGINAL BUG: If an MQTT message arrived twice (network retry), Firestore
+// was updated twice with the same data. No cache key = no deduplication.
+// Also created duplicate entries in audit logs and inflated analytics counts.
+//
+// FIX: Store a "seen message ID" cache with 5-minute TTL. Skip processing
+// if we've already handled this message recently.
+const MQTT_DEDUP_TTL = 300; // 5 minutes
+
 // SaaS Architecture: Redis Pub/Sub Support
 const pubSub = cache.getPubSub();
 const pub = pubSub ? pubSub.pub : null;
@@ -83,8 +92,21 @@ async function getActiveDevices() {
 
 async function processDevice(device) {
     try {
+        // ─── Deduplication: Skip if we recently processed this exact device ────
+        const dedupKey = `mqtt_dedup_${device.id}`;
+        const lastProcessed = await cache.get(dedupKey);
+        
         const feeds = await fetchSixHourData(device.channel, device.key);
         if (!feeds.length) return;
+
+        // Create a fingerprint of this data update to detect duplicates
+        const feedFingerprint = JSON.stringify(feeds.map(f => f.created_at));
+        
+        // If we processed the exact same timestamp sequence recently, skip it
+        if (lastProcessed === feedFingerprint) {
+            console.log(`[TelemetryWorker] Skipping duplicate update for ${device.id}`);
+            return;
+        }
 
         // CRITICAL FIX: Use centralized processing logic
         const telemetryData = await deviceState.processThingSpeakData(device, feeds);
@@ -92,6 +114,9 @@ async function processDevice(device) {
 
         // CRITICAL FIX: Update Firestore with standardized payload
         await deviceState.updateFirestoreTelemetry(device.type, device.id, telemetryData, feeds);
+
+        // Record that we processed this device's data with this fingerprint
+        await cache.set(dedupKey, feedFingerprint, MQTT_DEDUP_TTL);
 
         // CRITICAL FIX: Emit real-time update via Socket.IO
         const payload = {

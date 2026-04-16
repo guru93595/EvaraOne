@@ -1,0 +1,162 @@
+/**
+ * ✅ TASK #9: Firestore Security Rules
+ * 
+ * VULNERABILITY: Default rules allow anyone to read/write everything
+ * This is the last line of defense - database-level access control
+ * 
+ * Deploy with:
+ *   firebase deploy --only firestore:rules
+ * 
+ * Verify with Firebase Console → Firestore → Rules
+ */
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================================
+    // Helper functions
+    // ============================================================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return request.auth.token.role == 'superadmin';
+    }
+    
+    function isOwner(customerId) {
+      // User owns if their UID or customer_id matches
+      return request.auth.uid == customerId || 
+             request.auth.token.customer_id == customerId;
+    }
+    
+    function isTenantOwner(tenantId) {
+      return request.auth.uid == tenantId || 
+             request.auth.token.customer_id == tenantId ||
+             request.auth.token.community_id == tenantId;
+    }
+    
+    // ============================================================================
+    // SUPERADMIN ONLY: Zones, Customers, Audit Logs
+    // ============================================================================
+    
+    match /zones/{zoneId} {
+      // Superadmin can read all zones
+      allow read: if isSignedIn() && isAdmin();
+      
+      // Superadmin can only create/update zones
+      allow create, update, delete: if isSignedIn() && isAdmin() &&
+        request.resource.data.owner_customer_id != null &&
+        request.resource.data.owner_customer_id != '';
+      
+      // Customer can read their own zones only
+      allow read: if isSignedIn() && 
+        isOwner(resource.data.owner_customer_id);
+    }
+    
+    // ============================================================================
+    // Devices (Zone-specific)
+    // ============================================================================
+    
+    match /devices/{deviceId} {
+      // Superadmin can do anything
+      allow read, write: if isSignedIn() && isAdmin();
+      
+      // Customer can read their own devices (must be visible)
+      allow read: if isSignedIn() && 
+        isOwner(resource.data.customer_id) &&
+        resource.data.isVisibleToCustomer == true;
+      
+      // Customer cannot directly write — admin only
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // Type-Specific Collections: evaratank, evaradeep, evaraflow
+    // ============================================================================
+    
+    match /evaratank/{tankId} {
+      // Superadmin can do anything
+      allow read, write: if isSignedIn() && isAdmin();
+      
+      // Customer can read their own tanks
+      allow read: if isSignedIn() && 
+        isOwner(resource.data.customer_id);
+      
+      // Customer cannot write directly
+      allow write: if false;
+    }
+    
+    match /evaradeep/{wellId} {
+      allow read, write: if isSignedIn() && isAdmin();
+      allow read: if isSignedIn() && 
+        isOwner(resource.data.customer_id);
+      allow write: if false;
+    }
+    
+    match /evaraflow/{flowId} {
+      allow read, write: if isSignedIn() && isAdmin();
+      allow read: if isSignedIn() && 
+        isOwner(resource.data.customer_id);
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // Customers (Superadmin Only)
+    // ============================================================================
+    
+    match /customers/{customerId} {
+      // Superadmin can read/write all customers
+      allow read, write: if isSignedIn() && isAdmin();
+      
+      // Customer can read their own document
+      allow read: if isSignedIn() && request.auth.uid == customerId;
+      
+      // Customer cannot write their own doc (prevents privilege escalation)
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // Audit Logs (Superadmin Only)
+    // ============================================================================
+    
+    match /audit_logs/{logId} {
+      // Superadmin can read all logs
+      allow read: if isSignedIn() && isAdmin();
+      
+      // Admins can create logs (via server)
+      allow create: if isSignedIn() && isAdmin();
+      
+      // Logs are immutable (no update/delete)
+      allow update, delete: if false;
+    }
+    
+    // ============================================================================
+    // Telemetry / Sensor Data (Device + Superadmin)
+    // ============================================================================
+    
+    match /telemetry/{docId} {
+      // Superadmin can do anything
+      allow read, write: if isSignedIn() && isAdmin();
+      
+      // Device can write its own telemetry (via API key auth)
+      // In practice: device_id == authenticated device's ID
+      allow write: if isSignedIn() && 
+        request.resource.data.device_id == get(/databases/$(database)/documents/devices/$(request.auth.uid)).data.device_id;
+      
+      // Customer can read telemetry for devices they own
+      allow read: if isSignedIn() && isOwner(resource.data.customer_id);
+    }
+    
+    // ============================================================================
+    // Default: DENY ALL (explicit is better than implicit)
+    // ============================================================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

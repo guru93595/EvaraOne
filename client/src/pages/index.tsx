@@ -10,4 +10,5 @@ export { default as UnifiedNodeAnalytics } from './UnifiedNodeAnalytics';
 export { default as EvaraDeepAnalytics } from './EvaraDeepAnalytics';
 export { default as EvaraTankAnalytics } from './EvaraTankAnalytics';
 export { default as EvaraFlowAnalytics } from './EvaraFlowAnalytics';
+export { default as EvaraTDSAnalytics } from './EvaraTDSAnalytics';
 export { default as Login } from './Login';

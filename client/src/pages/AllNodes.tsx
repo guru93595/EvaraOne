@@ -4,6 +4,7 @@ import {
   Filter,
   MapPin,
   X,
+  FlaskConical,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
@@ -13,6 +14,7 @@ import { getDeviceAnalyticsRoute } from "../utils/deviceRouting";
 import { socket } from "../services/api";
 import { computeDeviceStatus } from "../services/DeviceService";
 import { getTankLevel } from "../utils/telemetryPipeline";
+import TDSCard from "../components/dashboard/TDSCard";
 
 type NodeCategory =
   | 'OHT'
@@ -24,8 +26,9 @@ type NodeCategory =
   | 'GovtBorewell'
   | 'PumpHouse'
   | 'FlowMeter'
-  | 'flow';
-type AnalyticsType = 'EvaraTank' | 'EvaraFlow' | 'EvaraDeep';
+  | 'flow'
+  | 'EvaraTDS';
+type AnalyticsType = 'EvaraTank' | 'EvaraFlow' | 'EvaraDeep' | 'EvaraTDS';
 
 // ─── Category config ─────────────────────────────────────────────────────────
 
@@ -120,6 +123,14 @@ export const CATEGORY_CONFIG: Record<
     badge: "bg-cyan-100 text-cyan-700",
     dot: "bg-cyan-500",
   },
+  EvaraTDS: {
+    label: "EvaraTDS",
+    icon: <FlaskConical size={28} className="text-blue-600 dark:text-blue-400" />,
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    badge: "bg-blue-100 text-blue-700",
+    dot: "bg-blue-500",
+  },
 };
 
 const ANALYTICS_CONFIG: Record<
@@ -165,6 +176,16 @@ const ANALYTICS_CONFIG: Record<
     badge: "bg-cyan-50 text-cyan-700 border border-cyan-200",
     dot: "bg-cyan-500",
   },
+  EvaraTDS: {
+    label: "EvaraTDS",
+    desc: "Water Quality",
+    icon: <FlaskConical size={20} className="w-5 h-5" />,
+    activeBg: "bg-blue-600",
+    activeText: "text-white",
+    activeBorder: "border-blue-600",
+    badge: "bg-blue-50 text-blue-700 border border-blue-200",
+    dot: "bg-blue-500",
+  },
 };
 
 const NodeCardItem = ({ node, realtimeStatuses }: { node: any, realtimeStatuses: any }) => {
@@ -182,6 +203,10 @@ const NodeCardItem = ({ node, realtimeStatuses }: { node: any, realtimeStatuses:
   // DRIVER FIX: Use the backend's authoritative smoothed level for absolute parity. 
   // This eliminates divergence between Map, List, and Analytics.
   const pct = lastTel.level_percentage ?? getTankLevel(node, lastTel);
+
+  if (node.analytics_template === 'EvaraTDS' || (node.category || node.asset_type || '').toString().toLowerCase().includes('tds')) {
+    return <TDSCard node={node} realtimeStatus={realtimeSnapshot} />;
+  }
 
   const cardDynamicClasses = isOnline
     ? "apple-glass-card bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/20"

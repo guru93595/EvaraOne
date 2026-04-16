@@ -100,18 +100,33 @@ function buildEventTimeline(history, currentState) {
 
 exports.getNodes = async (req, res) => {
     try {
-        // Read optional customerId filter from query string (used by CustomerDetails page)
+        // ✅ CRITICAL FIX: Don't cache customer-specific queries - always get fresh data
+        // This ensures consistent results when devices are added/removed
         const filterCustomerId = req.query.customerId || null;
 
-        // Cache key must include customerId so different customer pages never share a cache entry
+        console.log(`[NodesController] getNodes:`, {
+            userId: req.user.uid,
+            userRole: req.user.role,
+            filterCustomerId,
+            userCustomerId: req.user.customer_id
+        });
+
+        // For customer-specific queries, SKIP CACHE to ensure we always get real DB data
+        let shouldUseCache = !filterCustomerId;
+
         const nodesCacheKey = req.user.role === "superadmin"
             ? `user:admin:devices${filterCustomerId ? `:${filterCustomerId}` : ""}`
             : `user:${req.user.uid}:devices`;
 
-        const cachedNodes = await cache.get(nodesCacheKey);
-        if (cachedNodes) {
-            return res.status(200).json(cachedNodes);
+        if (shouldUseCache) {
+            const cachedNodes = await cache.get(nodesCacheKey);
+            if (cachedNodes) {
+                console.log(`[NodesController] ✅ Cache HIT for key: ${nodesCacheKey}, returned ${cachedNodes.length} devices`);
+                return res.status(200).json(cachedNodes);
+            }
         }
+
+        console.log(`[NodesController] Cache ${shouldUseCache ? 'MISS' : 'SKIPPED (customer-specific query)'} for key: ${nodesCacheKey}, fetching from DB...`);
 
         // Cache zones and communities maps (15 min TTL)
         let zoneMap = await cache.get("zone_map");
@@ -125,20 +140,27 @@ exports.getNodes = async (req, res) => {
 
         if (filterCustomerId) {
             // Filter by the provided customer ID
+            console.log(`[NodesController] Filtering by customerID: ${filterCustomerId}`);
             query = query.where("customer_id", "==", filterCustomerId);
             
             // Only apply visibility restriction if NOT a Superadmin
             if (req.user.role !== "superadmin") {
-                query = query.where("isVisibleToCustomer", "!=", false);
+                console.log(`[NodesController] Applying visibility filter (user is not superadmin)`);
+                query = query.where("isVisibleToCustomer", "==", true);
+            } else {
+                console.log(`[NodesController] No visibility filter (user IS superadmin)`);
             }
         } else if (req.user.role !== "superadmin") {
             // Customer viewing their own devices — always enforce visibility
+            console.log(`[NodesController] Filtering by customer's own ID and visibility`);
             query = query
                 .where("customer_id", "==", req.user.customer_id)
-                .where("isVisibleToCustomer", "!=", false);
+                .where("isVisibleToCustomer", "==", true);
         }
 
         const snapshot = await query.get();
+        console.log(`[NodesController] Query returned ${snapshot.size} device registry entries from DB`);
+        console.log(`[NodesController] Device types found:`, snapshot.docs.map(d => ({ id: d.id, device_type: d.data().device_type })));
 
         // Batched Metadata Fetching
         const typedGroups = {};
@@ -228,6 +250,16 @@ exports.getNodes = async (req, res) => {
                     zone_name: zoneMap[meta.zone_id] || null
                 };
 
+                // ✅ FIX: Ensure analytics_template is set (fallback for existing devices)
+                if (!nodeData.analytics_template) {
+                    const deviceType = (nodeData.device_type || "").toLowerCase();
+                    if (deviceType === "evaratank") nodeData.analytics_template = "EvaraTank";
+                    else if (deviceType === "evaradeep") nodeData.analytics_template = "EvaraDeep";
+                    else if (deviceType === "evaraflow") nodeData.analytics_template = "EvaraFlow";
+                    else if (deviceType === "evaratds") nodeData.analytics_template = "EvaraTDS";
+                    else nodeData.analytics_template = "EvaraTank"; // default
+                }
+
                 // Add calculated level_percentage for tanks
                 if (isTankType && levelPercentage !== null) {
                     nodeData.level_percentage = levelPercentage;
@@ -244,8 +276,23 @@ exports.getNodes = async (req, res) => {
             }
         }
 
-        // Cache the result for 10 seconds (balanced for real-time updates without overload)
-        await cache.set(nodesCacheKey, nodes, 10);
+                console.log(`[NodesController] ✅ Final result: ${nodes.length} devices prepared`);
+                console.log(`[NodesController] Device details:`, nodes.map(n => ({ 
+                    id: n.id, 
+                    name: n.label || n.displayName,
+                    device_type: n.device_type,
+                    analytics_template: n.analytics_template 
+                })));
+
+        // ✅ CRITICAL FIX: For customer-specific queries, use NO CACHE to ensure always fresh DB data
+        // Only cache superadmin queries (general devices list) - not specific customer queries
+        if (shouldUseCache) {
+            console.log(`[NodesController] Caching result for ${Math.ceil(nodes.length / 2)} seconds`);
+            await cache.set(nodesCacheKey, nodes, Math.ceil(nodes.length / 2));  // Dynamic short TTL
+        } else {
+            console.log(`[NodesController] ⚠️ NOT caching customer-specific query - always fresh from DB`);
+        }
+        
         res.status(200).json(nodes);
     } catch (error) {
         console.error(`[NodesController] Error in getNodes:`, error);

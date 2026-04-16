@@ -17,17 +17,17 @@ interface Props {
 
 export const FormField = ({ label, required, icon: Icon, error, hint, className = '', children }: Props) => (
     <div className={className}>
-        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-            {Icon && <Icon size={16} className="text-purple-600" />}
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-[var(--modal-label-color)] mb-2">
+            {Icon && <Icon size={16} className="text-purple-600 dark:text-purple-400" />}
             {label} {required && '*'}
         </label>
         {children}
         {error && (
-            <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
+            <p className="text-xs text-red-600 dark:text-red-400 mt-1.5 flex items-center gap-1">
                 <AlertCircle size={12} /> {error}
             </p>
         )}
-        {hint && !error && <p className="text-xs text-slate-500 mt-1.5">{hint}</p>}
+        {hint && !error && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{hint}</p>}
     </div>
 );
 
@@ -42,10 +42,10 @@ interface SectionProps {
 export const FormSection = ({ title, icon: Icon, subtitle, bordered, children }: SectionProps) => (
     <div className={bordered ? 'border-t pt-6' : ''}>
         <div className="mb-4">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
                 {Icon && <Icon size={14} />} {title}
             </h3>
-            {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{subtitle}</p>}
         </div>
         {children}
     </div>

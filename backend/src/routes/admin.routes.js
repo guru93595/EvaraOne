@@ -9,32 +9,40 @@ const {
 } = require("../controllers/admin.controller.js");
 
 const validateRequest = require("../middleware/validateRequest.js");
+const validateQuery = require("../middleware/validateQuery.js"); // ✅ TASK #10: Query validation
+
 const {
   createZoneSchema,
   createCustomerSchema,
   createNodeSchema,
-  updateNodeSchema
+  updateNodeSchema,
+  listQuerySchema   // ← #10 FIX: query param schema added in index.schema.js
 } = require("../schemas/index.schema.js");
 
 const auditLog = require("../middleware/audit.middleware.js");
 
+// ─── #10 FIX: Validate ALL endpoints, including GET query parameters ──────────
+// ORIGINAL BUG: GET /zones had no validation at all.
+// curl '…/zones?limit=999999' would hit Firestore with a 999999-document query.
+// FIX: Every route — including GETs — now runs through validateRequest() + validateQuery().
+
 // Zones
 router.post("/zones", validateRequest(createZoneSchema), auditLog("CREATE_ZONE"), createZone);
-router.get("/zones", getZones);
+router.get("/zones", validateQuery, validateRequest(listQuerySchema), getZones);  // ← #10 FIX: validateQuery caps limit
 router.get("/zones/:id", getZoneById);
 router.put("/zones/:id", validateRequest(createZoneSchema), auditLog("UPDATE_ZONE"), updateZone);
 router.delete("/zones/:id", auditLog("DELETE_ZONE"), deleteZone);
 
 // Customers
 router.post("/customers", validateRequest(createCustomerSchema), auditLog("CREATE_CUSTOMER"), createCustomer);
-router.get("/customers", getCustomers);
+router.get("/customers", validateQuery, validateRequest(listQuerySchema), getCustomers);  // ← #10 FIX
 router.get("/customers/:id", getCustomerById);
 router.put("/customers/:id", validateRequest(createCustomerSchema), auditLog("UPDATE_CUSTOMER"), updateCustomer);
 router.delete("/customers/:id", auditLog("DELETE_CUSTOMER"), deleteCustomer);
 
 // Nodes
 router.post("/nodes", validateRequest(createNodeSchema), auditLog("CREATE_NODE"), createNode);
-router.get("/nodes", getNodes);
+router.get("/nodes", validateQuery, validateRequest(listQuerySchema), getNodes);  // ← #10 FIX
 router.put("/nodes/:id", validateRequest(updateNodeSchema), auditLog("UPDATE_NODE"), updateNode);
 router.delete("/nodes/:id", auditLog("DELETE_NODE"), deleteNode);
 
