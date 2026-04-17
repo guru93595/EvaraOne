@@ -22,15 +22,9 @@ const authLimiter = rateLimit({
     error: 'Too many authentication attempts. Please try again in 15 minutes.',
     retryAfter: '900'  // 15 minutes in seconds
   },
-  skip: (req, res) => {
-    // Skip rate limiting for superadmin (they need to test)
-    // Only skip if they pass valid Firebase admin token
-    if (req.user?.role === 'superadmin') {
-      console.log('[Auth Rate Limit] Skipping for superadmin:', req.user.uid);
-      return true;
-    }
-    return false;
-  },
+  // ✅ AUDIT FIX L12/L13: Removed `skip` function
+  // req.user is NOT set at rate-limit time (auth middleware runs after this),
+  // so the superadmin skip never actually fired. All users rate-limited equally.
   keyGenerator: (req, res) => {
     // Rate-limit by IP + username (if both provided)
     // Use ipKeyGenerator for IPv6 support

@@ -103,6 +103,27 @@ const EvaraTDSAnalytics = () => {
     const quality = (device?.waterQualityRating || "Good") as keyof typeof QUALITY_CONFIG;
     const qualityConfig = QUALITY_CONFIG[quality] || QUALITY_CONFIG.Good;
 
+    // Calculate offline status based on lastUpdated
+    const { tdsDurationLabel } = useMemo(() => {
+        if (!device?.lastUpdated) return { tdsDurationLabel: '' };
+
+        const lastSeenDate = new Date(device.lastUpdated);
+        const now = new Date();
+        const diffMs = now.getTime() - lastSeenDate.getTime();
+        const diffMin = diffMs / 60000;
+        const offline = diffMin > 30;
+
+        // Duration Formatting
+        const hoursAgo = Math.floor(diffMin / 60);
+        const durationLabel = offline ? (
+            hoursAgo > 0
+                ? `Device offline · Last seen ${hoursAgo} hours ago`
+                : `Device offline · Last seen ${Math.floor(diffMin)} minutes ago`
+        ) : '';
+
+        return { tdsDurationLabel: durationLabel };
+    }, [device?.lastUpdated]);
+
     // Build chart data: last 36 readings ≈ 3 hours at 5-min ThingSpeak intervals
     const tdsHistory = useMemo(() => {
         const raw = (device?.tdsHistory || [])
@@ -197,6 +218,11 @@ const EvaraTDSAnalytics = () => {
                                 <h1 className="text-3xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>
                                     {device.deviceName} Analytics
                                 </h1>
+                                {tdsDurationLabel && (
+                                    <p className="text-xs font-bold text-red-500 m-0 mt-1">
+                                        {tdsDurationLabel}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -202,7 +202,38 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
 
   const onFormSubmit = async (data: DeviceInput) => {
     try {
-      // Step 5: Flat nodeData schema matching user's requested Firestore structure
+      // ✅ MANDATORY VALIDATION: Channel ID REQUIRED
+      const channelId = tsSelector.channelId?.trim();
+      if (!channelId) {
+        console.error(`[AddDeviceForm] ❌ NO Channel ID provided!`);
+        showToast("❌ CHANNEL ID is REQUIRED - Please enter your ThingSpeak Channel ID", "error");
+        return;
+      }
+
+      // ✅ MANDATORY VALIDATION: API Key REQUIRED
+      const apiKey = tsSelector.readApiKey?.trim();
+      if (!apiKey) {
+        console.error(`[AddDeviceForm] ❌ NO API Key provided!`);
+        showToast("❌ READ API KEY is REQUIRED - Please enter your ThingSpeak Read API Key", "error");
+        return;
+      }
+
+      // ✅ MANDATORY VALIDATION: At least one field must be selected (for Flow/Tank)
+      const selectedFieldsCount = (tsSelector.selectedFields || []).filter(f => f && f.trim()).length;
+      if (selectedFieldsCount === 0 && (data.device_type === 'flow' || data.device_type === 'tank')) {
+        console.error(`[AddDeviceForm] ❌ NO fields selected!`);
+        showToast("❌ Select at least ONE ThingSpeak field", "error");
+        return;
+      }
+
+      console.log(`\n[AddDeviceForm] 📤 ==================== SUBMITTING ===================`);
+      console.log(`[AddDeviceForm] Channel ID: "${channelId}"`);
+      console.log(`[AddDeviceForm] API Key: "${apiKey}"`);
+      console.log(`[AddDeviceForm] Selected Fields:`, tsSelector.selectedFields);
+      console.log(`[AddDeviceForm] Device Type: ${data.device_type}`);
+      console.log(`[AddDeviceForm] ======================================================`);
+
+      // Step 5: Build nodeData with VALIDATED values
       const nodeData: any = {
         hardwareId: data.node_key,
         displayName: data.name,
@@ -231,8 +262,9 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
         latitude: Number(data.latitude),
         longitude: Number(data.longitude),
 
-        thingspeakChannelId: data.thingspeak_channel_id,
-        thingspeakReadKey: data.thingspeak_read_key,
+        // ✅ GUARANTEED VALUES (validated above)
+        thingspeakChannelId: channelId,
+        thingspeakReadKey: apiKey,
         waterLevelField: data.water_level_field,
         borewellDepthField: data.depth_field,
         meterReadingField: data.meter_reading_field,
@@ -253,12 +285,15 @@ export const AddDeviceForm = ({ onSubmit, onCancel, initialData }: Props) => {
         status: "online",
       };
 
+      console.log(`[AddDeviceForm] 🚀 SENDING DATA:`, JSON.stringify(nodeData, null, 2));
+
       let result;
       if (isEdit) {
         result = await adminService.updateNode(initialData.id, nodeData);
         showToast("Node updated successfully", "success");
       } else {
         result = await adminService.createNode(nodeData);
+        console.log(`[AddDeviceForm] ✅ BACKEND RESPONSE:`, result);
         showToast("Node commissioned successfully! 🎉", "success");
       }
 

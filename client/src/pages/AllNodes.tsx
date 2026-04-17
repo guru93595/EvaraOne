@@ -365,8 +365,24 @@ const AllNodes = () => {
       n.label.toLowerCase().includes(q) ||
       (n.location_name || "").toLowerCase().includes(q) ||
       n.node_key.toLowerCase().includes(q);
-    return matchAnalytics && matchStatus && matchSearch;
+    
+    const matches = matchAnalytics && matchStatus && matchSearch;
+    if (!matches) {
+      console.log(`[AllNodes] Device ${n.id} filtered out:`, { 
+        matchAnalytics, 
+        matchStatus, 
+        matchSearch, 
+        analytics_filter: analyticsFilter, 
+        device_template: n.analytics_template,
+        status_filter: statusFilter,
+        device_status: currentStatus
+      });
+    }
+    return matches;
   }), [nodes, analyticsFilter, statusFilter, search]);
+  
+  console.log(`[AllNodes] Total devices: ${nodes.length}, Filtered: ${filtered.length}, Filter state:`, 
+    { analyticsFilter, statusFilter, searchQuery: search });
 
   const { onlineCount, offlineCount } = useMemo(() => {
     const statuses = nodes.map(n => {

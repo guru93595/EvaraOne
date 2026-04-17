@@ -59,24 +59,22 @@ const CustomerDetails = () => {
   useEffect(() => {
     if (!customerId) return;
 
+    // ✅ FIX: Use ONLY subscription, not duplicate fetchNodes()
     const unsub = deviceService.subscribeToNodeUpdates(
-      (nodesData) => setNodes([nodesData]),
+      (nodesData) => {
+        // ✅ FIX: nodesData is already the full array, don't wrap in [...]
+        setNodes(nodesData);
+
+        // KEY CHANGE: Initialize toggle state from isVisibleToCustomer field
+        // Falls back to true if field doesn't exist yet (safe default)
+        const toggleMap: Record<string, boolean> = {};
+        nodesData.forEach((n: any) => {
+          toggleMap[n.id] = n.isVisibleToCustomer !== false; // default true if not set
+        });
+        setDeviceToggles(toggleMap);
+      },
       { community_id: "ignore_we_are_fetching_all" }
     );
-
-    const fetchNodes = async () => {
-      const allNodes = await deviceService.getMapNodes(undefined, customerId);
-      setNodes(allNodes);
-
-      // KEY CHANGE: Initialize toggle state from isVisibleToCustomer field
-      // Falls back to true if field doesn't exist yet (safe default)
-      const toggleMap: Record<string, boolean> = {};
-      allNodes.forEach((n: any) => {
-        toggleMap[n.id] = n.isVisibleToCustomer !== false; // default true if not set
-      });
-      setDeviceToggles(toggleMap);
-    };
-    fetchNodes();
 
     return () => unsub();
   }, [customerId]);

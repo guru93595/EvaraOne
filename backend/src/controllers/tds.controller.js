@@ -8,39 +8,11 @@ const cache = require("../config/cache.js");
 const axios = require("axios");
 const { fetchLatestData } = require("../services/thingspeakService.js");
 const { checkOwnership } = require("../middleware/auth.middleware.js");
+const { checkDeviceVisibilityWithAudit } = require("../utils/checkDeviceVisibility.js");
+const logger = require("../utils/logger.js");
 
-/**
- * Helper to resolve device by document ID OR device_id/node_id
- * Same logic as used in nodes.controller.js for consistency
- */
-async function resolveDevice(id) {
-  if (!id) return null;
-  console.log(`[TDSController] Attempting to resolve device for ID: ${id}`);
-
-  // 1. Try direct document lookup
-  const directDoc = await db.collection("devices").doc(id).get();
-  if (directDoc.exists) {
-    console.log(`[TDSController] Found device by DocID: ${id}`);
-    return directDoc;
-  }
-
-  // 2. Query by device_id field (human-readable hardware ID)
-  const q1 = await db.collection("devices").where("device_id", "==", id).limit(1).get();
-  if (!q1.empty) {
-    console.log(`[TDSController] Found device by device_id: ${id} (DocID: ${q1.docs[0].id})`);
-    return q1.docs[0];
-  }
-
-  // 3. Fallback to node_id
-  const q2 = await db.collection("devices").where("node_id", "==", id).limit(1).get();
-  if (!q2.empty) {
-    console.log(`[TDSController] Found device by node_id: ${id} (DocID: ${q2.docs[0].id})`);
-    return q2.docs[0];
-  }
-
-  console.log(`[TDSController] ❌ Device NOT found for ID: ${id}`);
-  return null;
-}
+// ✅ AUDIT FIX L2: Use shared resolveDevice utility (was duplicated in 3 controllers)
+const resolveDevice = require("../utils/resolveDevice.js");
 
 /**
  * Helper to resolve TDS metadata document
@@ -90,7 +62,7 @@ exports.getTDSTelemetry = async (req, res) => {
       return res.status(400).json({ error: "Device is not a TDS sensor" });
     }
 
-    // Check ownership
+    // ✅ CRITICAL FIX: Check ownership
     if (req.user.role !== "superadmin") {
       const isOwner = await checkOwnership(
         req.user.customer_id || req.user.uid,
@@ -101,6 +73,12 @@ exports.getTDSTelemetry = async (req, res) => {
       if (!isOwner) {
         return res.status(403).json({ error: "Unauthorized access" });
       }
+    }
+
+    // ✅ CRITICAL FIX: ENFORCE DEVICE VISIBILITY (using shared helper)
+    // Defense in depth: check visibility in application layer
+    if (!checkDeviceVisibilityWithAudit(registry, id, req.user.uid, req.user.role)) {
+      return res.status(403).json({ error: "Device not visible to your account" });
     }
 
     // Get TDS metadata
@@ -213,6 +191,11 @@ exports.getTDSHistory = async (req, res) => {
       }
     }
 
+    // ✅ CRITICAL FIX: ENFORCE DEVICE VISIBILITY (using shared helper)
+    if (!checkDeviceVisibilityWithAudit(registry, id, req.user.uid, req.user.role)) {
+      return res.status(403).json({ error: "Device not visible to your account" });
+    }
+
     // Get TDS metadata
     const metaDoc = await resolveMetadata(deviceDoc);
     if (!metaDoc) {
@@ -288,6 +271,26 @@ exports.getTDSConfig = async (req, res) => {
     }
 
     const id = deviceDoc.id;
+    const registry = deviceDoc.data();
+
+    // ✅ CRITICAL FIX: Check ownership
+    if (req.user.role !== "superadmin") {
+      const isOwner = await checkOwnership(
+        req.user.customer_id || req.user.uid,
+        id,
+        req.user.role,
+        req.user.community_id
+      );
+      if (!isOwner) {
+        return res.status(403).json({ error: "Unauthorized access" });
+      }
+    }
+
+    // ✅ CRITICAL FIX: ENFORCE DEVICE VISIBILITY (using shared helper)
+    if (!checkDeviceVisibilityWithAudit(registry, id, req.user.uid, req.user.role)) {
+      return res.status(403).json({ error: "Device not visible to your account" });
+    }
+
     const metaDoc = await resolveMetadata(deviceDoc);
     if (!metaDoc) {
       return res.status(404).json({ error: "TDS configuration not found" });
@@ -344,6 +347,11 @@ exports.updateTDSConfig = async (req, res) => {
       }
     }
 
+    // ✅ CRITICAL FIX: ENFORCE DEVICE VISIBILITY (using shared helper)
+    if (!checkDeviceVisibilityWithAudit(registry, id, req.user.uid, req.user.role)) {
+      return res.status(403).json({ error: "Device not visible to your account" });
+    }
+
     const metaDoc = await resolveMetadata(deviceDoc);
     if (!metaDoc) {
       return res.status(404).json({ error: "TDS configuration not found" });
@@ -368,6 +376,19 @@ exports.updateTDSConfig = async (req, res) => {
     await cache.del(`tds:telemetry:${id}`);
     await cache.flushPrefix("nodes_");
 
+    // ✅ FIX #16: EMIT SOCKET EVENT FOR TDS CONFIG UPDATE
+    const registryData = registry?.data?.();
+    const customerId = registryData?.customer_id || registryData?.customerId;
+    if (customerId && global.io) {
+      global.io.to(`customer:${customerId}`).emit("device:updated", {
+        deviceId: id,
+        changes: updated,
+        success: true,
+        timestamp: new Date().toISOString()
+      });
+      console.log(`[TDSController] ✅ device:updated event emitted for TDS config update: ${id}`);
+    }
+
     res.status(200).json({ success: true, message: "Configuration updated" });
   } catch (error) {
     console.error("[TDSController] Error updating config:", error);
@@ -389,6 +410,26 @@ exports.getTDSAnalytics = async (req, res) => {
     }
 
     const id = deviceDoc.id;
+    const registry = deviceDoc.data();
+
+    // ✅ CRITICAL FIX: Check ownership
+    if (req.user.role !== "superadmin") {
+      const isOwner = await checkOwnership(
+        req.user.customer_id || req.user.uid,
+        id,
+        req.user.role,
+        req.user.community_id
+      );
+      if (!isOwner) {
+        return res.status(403).json({ error: "Unauthorized access" });
+      }
+    }
+
+    // ✅ CRITICAL FIX: ENFORCE DEVICE VISIBILITY (using shared helper)
+    if (!checkDeviceVisibilityWithAudit(registry, id, req.user.uid, req.user.role)) {
+      return res.status(403).json({ error: "Device not visible to your account" });
+    }
+
     const metaDoc = await resolveMetadata(deviceDoc);
     if (!metaDoc) {
       return res.status(404).json({ error: "TDS device not found" });

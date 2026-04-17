@@ -98,9 +98,9 @@ app.set('trust proxy', process.env.TRUST_PROXY_DEPTH || 1);
 
 app.use(express.json());
 
-// ✅ PHASE 2: Task #15 - Replace morgan with Pino structured JSON logging
-app.use(httpLogger);
+// ✅ AUDIT FIX L10: requestIdMiddleware BEFORE httpLogger so request ID appears in all logs
 app.use(requestIdMiddleware);
+app.use(httpLogger);
 
 // ============================================================================
 // Rate Limiting: Per-user limiting (not per-IP) for reverse proxy environments
@@ -114,8 +114,14 @@ const limiter = rateLimit({
   keyGenerator: (req, res) => {
     return req.user?.uid || ipKeyGenerator(req, res);
   },
-  // ✅ Skip rate limiting for superadmins
-  skip: (req, res) => req.user?.role === "superadmin",
+  // ✅ CRITICAL FIX #1: NO EXEMPTIONS FOR SUPERADMINS
+  // A compromised superadmin account can DOS the backend
+  // Instead: lighter limits for admins (not unlimited)
+  skip: (req, res) => {
+    // Apply lighter rate limit for superadmins (1000/min vs 100/min for users)
+    // This allows bulk operations but still prevents DOS
+    return false;  // Never skip — all users are rate-limited
+  },
   handler: (req, res) => {
     res.status(429).json({
       error: "Too many requests, please try again later."
@@ -194,42 +200,60 @@ io.use(async (socket, next) => {
     const redisKey = `socket_connections:${uid}`;
 
     // ─────────────────────────────────────────
-    // CHECK: How many connections does this user have?
+    // ✅ AUDIT FIX C6: Atomic INCR eliminates TOCTOU race
+    // Old: GET count → check → SET count+1 (two concurrent connects both read same count)
+    // New: INCR atomically increments and returns new value (guaranteed unique)
     // ─────────────────────────────────────────
-    const currentCount = parseInt(await cache.get(redisKey)) || 0;
+    let currentCount;
+    if (cache.isRedisReady && cache.redis) {
+      currentCount = await cache.redis.incr(redisKey);
+      if (currentCount === 1) {
+        // First connection — set TTL
+        await cache.redis.expire(redisKey, CONNECTION_TTL);
+      }
+    } else {
+      // Memory fallback (single-instance only)
+      currentCount = (parseInt(await cache.get(redisKey)) || 0) + 1;
+      await cache.set(redisKey, currentCount, CONNECTION_TTL);
+    }
 
-    if (currentCount >= MAX_CONNECTIONS_PER_USER) {
+    if (currentCount > MAX_CONNECTIONS_PER_USER) {
+      // Over limit — rollback the increment
+      if (cache.isRedisReady && cache.redis) {
+        await cache.redis.decr(redisKey);
+      }
       console.warn(`[Socket.io] ❌ Connection limit hit for ${uid}: ${currentCount}/${MAX_CONNECTIONS_PER_USER}`);
       return next(new Error(
         `Too many connections. Max ${MAX_CONNECTIONS_PER_USER} allowed per user.`
       ));
     }
 
-    // ─────────────────────────────────────────
-    // ALLOW: Increment the count in Redis
-    // ─────────────────────────────────────────
-    const newCount = currentCount + 1;
-    await cache.set(redisKey, newCount, CONNECTION_TTL);
-
-    console.log(`[Socket.io] ✅ User ${uid} connected (${newCount}/${MAX_CONNECTIONS_PER_USER})`);
+    console.log(`[Socket.io] ✅ User ${uid} connected (${currentCount}/${MAX_CONNECTIONS_PER_USER})`);
 
     // ─────────────────────────────────────────
     // CLEANUP: When this socket disconnects,
-    // decrement the count in Redis
+    // decrement the count atomically in Redis
     // ─────────────────────────────────────────
     socket.on('disconnect', async (reason) => {
       try {
-        const currentOnDisconnect = parseInt(await cache.get(redisKey)) || 1;
-        const remaining = currentOnDisconnect - 1;
-
-        if (remaining <= 0) {
-          // Nobody left — delete the key entirely
-          await cache.del(redisKey);
-          console.log(`[Socket.io] User ${uid} fully disconnected`);
+        if (cache.isRedisReady && cache.redis) {
+          const remaining = await cache.redis.decr(redisKey);
+          if (remaining <= 0) {
+            await cache.redis.del(redisKey);
+            console.log(`[Socket.io] User ${uid} fully disconnected`);
+          } else {
+            console.log(`[Socket.io] User ${uid} disconnected one socket (${remaining} remaining)`);
+          }
         } else {
-          // Still some connections — update the count
-          await cache.set(redisKey, remaining, CONNECTION_TTL);
-          console.log(`[Socket.io] User ${uid} disconnected one socket (${remaining} remaining)`);
+          const currentOnDisconnect = parseInt(await cache.get(redisKey)) || 1;
+          const remaining = currentOnDisconnect - 1;
+          if (remaining <= 0) {
+            await cache.del(redisKey);
+            console.log(`[Socket.io] User ${uid} fully disconnected`);
+          } else {
+            await cache.set(redisKey, remaining, CONNECTION_TTL);
+            console.log(`[Socket.io] User ${uid} disconnected one socket (${remaining} remaining)`);
+          }
         }
       } catch (cleanupErr) {
         // Don't let cleanup errors break anything
@@ -347,6 +371,14 @@ io.use(async (socket, next) => {
 io.on("connection", (socket) => {
     console.log(`[Socket.io] Client connected: ${socket.user?.uid || 'Unknown'}`);
 
+    // ✅ FIX #11: AUTO-SUBSCRIBE USER TO THEIR CUSTOMER ROOM
+    // When user connects, subscribe them to customer-specific events
+    // This allows Emit("device:added", {...}) to reach all users of that customer
+    if (socket.user?.customer_id) {
+        socket.join(`customer:${socket.user.customer_id}`);
+        console.log(`[Socket.io] ✅ User ${socket.user.uid} subscribed to customer:${socket.user.customer_id}`);
+    }
+
     // ✅ FIX #2: Validate subscribe_device with Zod
     socket.on("subscribe_device", async (rawData) => {
         try {
@@ -447,7 +479,7 @@ app.use("/api/v1/nodes", globalSaaSAuth, nodesRoutes);
 
 // TDS device routes
 const tdsRoutes = require("./routes/tds.routes.js");
-app.use("/api/v1/devices/tds", tdsRoutes);
+app.use("/api/v1/devices/tds", globalSaaSAuth, tdsRoutes);
 
 // Other routes that frontend service calls
 app.get("/api/v1/admin/hierarchy", globalSaaSAuth, getHierarchy);

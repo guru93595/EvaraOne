@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { adminService } from "../../../services/admin";
 import { Modal } from "../../../components/ui/Modal";
@@ -29,6 +30,7 @@ interface RegionStat {
 }
 
 const RegionsOverview = () => {
+  const navigate = useNavigate();
   const { user, role, loading: authLoading } = useAuth();
   const [zones, setRegions] = useState<RegionRow[]>([]);
   const [stats, setStats] = useState<RegionStat[]>([]);
@@ -242,7 +244,10 @@ const RegionsOverview = () => {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-[4px] text-[11px] font-[700] zone-manage uppercase tracking-wider opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => navigate(`/superadmin/zones/${zone.id}/customers`)}
+                      className="flex items-center gap-[4px] text-[11px] font-[700] zone-manage uppercase tracking-wider opacity-80 group-hover:opacity-100 transition-opacity hover:text-[#3A7AFE] bg-transparent border-0 cursor-pointer p-0"
+                    >
                       {user?.role === "superadmin" && (
                         <div className="flex items-center gap-2 mr-4">
                           <button
@@ -269,7 +274,7 @@ const RegionsOverview = () => {
                         size={14}
                         className="transform group-hover:translate-x-1 transition-transform"
                       />
-                    </div>
+                    </button>
                   </div>
                 </div>
               </div>

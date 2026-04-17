@@ -399,7 +399,28 @@ const EvaraTankAnalytics = () => {
 
     const isOffline = onlineStatus === 'Offline';
 
+    // Derived Offline Logic with duration message
+    const { durLabel: tankDurationLabel } = useMemo(() => {
+        if (!deviceLastSeen) return { durLabel: '' };
 
+        const lastSeenDate = new Date(deviceLastSeen);
+        const now = new Date();
+        const diffMs = now.getTime() - lastSeenDate.getTime();
+        const diffMin = diffMs / 60000;
+        const offline = diffMin > 30;
+
+        // Duration Formatting
+        const hoursAgo = Math.floor(diffMin / 60);
+        const durationLabel = offline ? (
+            hoursAgo > 0
+                ? `Device offline · Last seen ${hoursAgo} hours ago`
+                : `Device offline · Last seen ${Math.floor(diffMin)} minutes ago`
+        ) : '';
+
+        return { durLabel: durationLabel };
+    }, [deviceLastSeen]);
+
+    const effectiveIsOffline = isOffline;
 
     // ── Stale-data age ────────────────────────────────────────────────────────
     useStaleDataAge(activeTelemetry?.timestamp ?? null);
@@ -797,6 +818,12 @@ const EvaraTankAnalytics = () => {
 
                                 {deviceName} Analytics
                             </h2>
+
+                            {effectiveIsOffline && tankDurationLabel && (
+                                <p className="text-xs font-bold text-red-500 m-0 mt-1">
+                                    {tankDurationLabel}
+                                </p>
+                            )}
 
                             {zoneName && (
                                 <p className="text-xs text-slate-400 m-0 mt-1">

@@ -172,8 +172,9 @@ class NodeService {
       zoneId: data.zone_id || data.zoneId,
       capacity: capacityLitres,
       depth: depthM,
-      // DRIVER FIX: Elevate telemetry_snapshot as the primary source for last_telemetry.
-      // This ensures Dashboard and Map pick up the backend-calculated smoothed values.
+      // ✅ CRITICAL: Ensure ThingSpeak config passes through
+      thingspeak_channel_id: data.thingspeak_channel_id,
+      thingspeak_read_api_key: data.thingspeak_read_api_key,
       last_telemetry: data.telemetry_snapshot || data.last_telemetry || {
         Level: data.last_level || 0,
         level_percentage: data.last_level || 0,
@@ -181,11 +182,12 @@ class NodeService {
         Battery: data.battery_voltage || "4.2V",
         Signal: data.signal_strength || "Good"
       }
-    } as any; // Cast as any to satisfy legacy UI property lookups during transition
+    } as any;
   }
 
   /**
    * Replaced onSnapshot with standard polling mechanism
+   * ✅ CRITICAL FIX: Call callback ONCE with ALL nodes, not forEach
    */
   subscribeToNodeUpdates(
     callback: (payload: any) => void,
@@ -196,7 +198,8 @@ class NodeService {
     const poll = async () => {
       try {
         const nodes = await this.getMapNodes(filter?.community_id);
-        nodes.forEach(node => callback(node));
+        // ✅ FIX: Callback receives ENTIRE array, not individual nodes
+        callback(nodes);
       } catch (error) {
         console.error("Polling nodes failed", error);
       }
@@ -220,6 +223,10 @@ class NodeService {
    */
   async getNodeDetails(id: string): Promise<MapDevice> {
     const response = await api.get(`/nodes/${id}`);
+    console.log(`[DeviceService] 🔄 getNodeDetails for ${id}:`);
+    console.log(`[DeviceService]   Response keys:`, Object.keys(response.data).filter(k => k.includes('thingspeak') || k.includes('channel') || k.includes('field')));
+    console.log(`[DeviceService]   Channel ID:`, response.data.thingspeak_channel_id);
+    console.log(`[DeviceService]   API Key:`, response.data.thingspeak_read_api_key ? '***PRESENT***' : 'NOT_PRESENT');
     return NodeService.mapNodeData(response.data);
   }
 

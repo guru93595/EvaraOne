@@ -63,13 +63,71 @@ const calculateBackoff = (failCount) => {
 };
 
 // ============================================================================
-// ✅ TASK #3 — MQTT Connection with Options + Re-subscribe Logic
+// ✅ CRITICAL FIX #1: MQTT Authentication + TLS Encryption
 // ============================================================================
-const mqttClient = mqtt.connect(MQTT_BROKER_URL, {
-  reconnectPeriod: 0,       // ← MANUAL control: we handle reconnection
+// SECURITY REQUIREMENTS:
+// 1. MQTT_USERNAME & MQTT_PASSWORD required (no anonymous access)
+// 2. TLS certificates required for production (port 8883 = MQTTS)
+// 3. CA certificate for server verification (prevent MITM attacks)
+// ============================================================================
+
+const fs = require('fs');
+const path = require('path');
+
+// ─── Validate required credentials ────────────────────────────────────────
+const mqttUsername = process.env.MQTT_USERNAME;
+const mqttPassword = process.env.MQTT_PASSWORD;
+
+if (!mqttUsername || !mqttPassword) {
+  throw new Error(
+    `CRITICAL: MQTT credentials missing. Set MQTT_USERNAME and MQTT_PASSWORD env vars. 
+     This prevents unauthenticated device spoofing.`
+  );
+}
+
+// ─── MQTT Connection Options ──────────────────────────────────────────────
+const mqttOptions = {
+  reconnectPeriod: 0,       // ← MANUAL control: we handle reconnection via exponential backoff
   connectTimeout: 5000,     // give up on each attempt after 5 seconds
   keepalive: 60,            // send a heartbeat every 60 seconds
-});
+  username: mqttUsername,   // ← REQUIRED: Broker rejects unauthenticated connections
+  password: mqttPassword,   // ← REQUIRED: Authentication credential
+  clean: true,              // Start fresh session on connect (security best practice)
+};
+
+// ─── TLS Configuration (for MQTTS on port 8883) ───────────────────────────
+const useSecureMQTT = process.env.MQTT_USE_TLS === 'true' || 
+                      process.env.NODE_ENV === 'production';
+
+if (useSecureMQTT) {
+  // Load CA certificate for server verification (prevent MITM attacks)
+  const caCertPath = process.env.MQTT_CA_CERT_PATH || 
+                     '/mosquitto/certs/ca.crt';
+  
+  try {
+    if (fs.existsSync(caCertPath)) {
+      mqttOptions.rejectUnauthorized = true;
+      mqttOptions.ca = [fs.readFileSync(caCertPath)];
+      console.log(`[MQTT] TLS enabled: CA certificate loaded from ${caCertPath}`);
+    } else {
+      // Self-signed or development: skip strict verification
+      mqttOptions.rejectUnauthorized = false;
+      console.warn(`[MQTT] TLS enabled but CA cert not found at ${caCertPath}. Running with insecure mode (dev only).`);
+    }
+  } catch (err) {
+    console.error(`[MQTT] Failed to load CA certificate:`, err.message);
+    process.exit(1);
+  }
+
+  // Use secure MQTTS port (8883) instead of plaintext (1883)
+  const secureBrokerUrl = (process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883')
+    .replace(/^mqtt:/, 'mqtts:')
+    .replace(/:1883$/, ':8883');
+  
+  MQTT_BROKER_URL = secureBrokerUrl;
+}
+
+const mqttClient = mqtt.connect(MQTT_BROKER_URL, mqttOptions);
 
 // ✅ When MQTT connects successfully
 mqttClient.on('connect', () => {

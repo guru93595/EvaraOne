@@ -208,10 +208,12 @@ exports.deleteZone = async (req, res) => {
         }
         
         // ─── #2 FIX: Tenant Isolation Check ─────────────────────────────────
+        // ✅ AUDIT FIX M4: Check actual zone ownership fields, not non-existent tenant_id
         const zoneData = doc.data();
         if (req.user.role !== "superadmin") {
             const tenantId = req.user.community_id || req.user.customer_id || req.user.uid;
-            if (zoneData.tenant_id && zoneData.tenant_id !== tenantId) {
+            const zoneOwner = zoneData.owner_customer_id || zoneData.customer_id || zoneData.tenant_id;
+            if (zoneOwner && zoneOwner !== tenantId) {
                 throw new AppError("Access denied", 403);
             }
         }
@@ -332,7 +334,7 @@ exports.getCustomers = async (req, res) => {
         res.status(200).json(customers);
     } catch (error) {
         console.error("[AdminController] getCustomers CRITICAL ERROR:", error);
-        res.status(500).json({ error: "Failed to get customers", details: error.message });
+        res.status(500).json({ error: "Failed to get customers" });
     }
 };
 
@@ -425,6 +427,12 @@ exports.createNode = async (req, res) => {
             id: fallbackId
         } = req.body;
 
+        // 🔍 DEBUG: Log immediately after destructuring
+        console.log(`\n[createNode] 📥 DESTRUCTURED FROM req.body:`);
+        console.log(`[createNode]   thingspeakChannelId: "${thingspeakChannelId}"`);
+        console.log(`[createNode]   thingspeakReadKey: "${thingspeakReadKey}"`);
+        console.log(`[createNode]   Full req.body keys:`, Object.keys(req.body));
+
         const timestamp = new Date();
         const idForDevice = hardwareId || `DEV-${Date.now()}`;
         const typeNormalized = (assetType || "evaratank").toLowerCase();
@@ -494,6 +502,12 @@ exports.createNode = async (req, res) => {
         batch.set(deviceDocRef, registryData); // Queue but don't write yet
         const deviceDocId = deviceDocRef.id;
 
+        // 🔍 DEBUG: Log what we received from frontend
+        console.log(`\n[createNode] 🎯 RECEIVED FROM FRONTEND:`);
+        console.log(`[createNode]   thingspeakChannelId value: "${thingspeakChannelId}"`);
+        console.log(`[createNode]   thingspeakReadKey value: "${thingspeakReadKey}"`);
+        console.log(`[createNode]   assetType: "${assetType}"`);
+
         // 2. Prepare METADATA entry (Detailed)
         let metadata = {
             device_id: idForDevice,
@@ -510,7 +524,16 @@ exports.createNode = async (req, res) => {
             updated_at: timestamp
         };
 
-        // Add type-specific metadata
+        // 🔍 DEBUG: Log metadata BEFORE adding device type specific data
+        console.log(`[createNode] 📝 METADATA BASE CREATED:`);
+        console.log(`[createNode]   thingspeak_channel_id will be: "${metadata.thingspeak_channel_id}"`);
+        console.log(`[createNode]   thingspeak_read_api_key will be: "${metadata.thingspeak_read_api_key}"`);
+
+        // ✅ FIX #7: Add PROPER FIELD MAPPING SCHEMA (Semantic names → ThingSpeak fields)
+        // BEFORE: sensor_field_mapping had backwards mapping [field] → "semantic_name"
+        // AFTER: New "fields" object maps semantic names → actual field numbers
+        // This lets backend do: device.fields.tds instead of hardcoded field1/field2
+        
         if (targetCol === "evaratank") {
             metadata.tank_size = capacity || 0;
             metadata.configuration = {
@@ -518,8 +541,12 @@ exports.createNode = async (req, res) => {
                 tank_breadth: tankBreadth || 0,
                 depth: depth || 0
             };
-            const field = waterLevelField || "field2";
-            metadata.sensor_field_mapping = { [field]: "water_level_raw_sensor_reading" };
+            const levelField = waterLevelField || "field2";
+            // NEW: Semantic field name → ThingSpeak field number
+            metadata.fields = {
+                water_level: levelField  // e.g., "field2"
+            };
+            metadata.sensor_field_mapping = { [levelField]: "water_level_raw_sensor_reading" };
         } else if (targetCol === "evaradeep") {
             metadata.configuration = {
                 total_depth: depth || 0,
@@ -527,16 +554,26 @@ exports.createNode = async (req, res) => {
                 dynamic_water_level: dynamicDepth || 0,
                 recharge_threshold: rechargeThreshold || 0
             };
-            const field = borewellDepthField || "field2";
-            metadata.sensor_field_mapping = { [field]: "water_level_in_cm" };
+            const depthField = borewellDepthField || "field2";
+            metadata.fields = {
+                water_level: depthField
+            };
+            metadata.sensor_field_mapping = { [depthField]: "water_level_in_cm" };
         } else if (targetCol === "evaraflow") {
             metadata.configuration = {};
             const rateField = flowRateField || "field2";
             const readingField = meterReadingField || "field1";
+            metadata.fields = {
+                flow_rate: rateField,
+                total_liters: readingField
+            };
             metadata.sensor_field_mapping = {
                 [rateField]: "flow_rate",
                 [readingField]: "current_reading"
             };
+            console.log(`[createNode-FLOW] 📝 Storing Flow metadata:`);
+            console.log(`[createNode-FLOW]   Channel ID: "${metadata.thingspeak_channel_id}"`);
+            console.log(`[createNode-FLOW]   API Key: "${metadata.thingspeak_read_api_key ? '***' : 'EMPTY'}"`);
         } else if (targetCol === "evaratds") {
             metadata.configuration = {
                 type: "TDS",
@@ -544,22 +581,30 @@ exports.createNode = async (req, res) => {
                 min_threshold: 0,
                 max_threshold: 2000
             };
+            // NEW: Allow custom TDS/Temperature field mapping
+            metadata.fields = {
+                tds: "field1",
+                temperature: "field2"
+            };
             metadata.sensor_field_mapping = {
                 "field1": "tds_value",
                 "field2": "temperature"
             };
         }
 
-        // Reserve a spot in metadata collection
-        const metaDocRef = db.collection(targetCol).doc();
-        batch.set(metaDocRef, metadata); // Queue but don't write yet
+        // Critical Fix: Use SAME document ID for metadata as registry
+        // This ensures fetch can find metadata using the registry document ID
+        batch.set(db.collection(targetCol).doc(deviceDocId), metadata);
 
-        // ============================================================================
-        // ✅ TASK #6 — COMMIT: Write BOTH documents at once
-        // If this fails, NEITHER document is written. No orphans. Ever.
-        // ============================================================================
+        console.log(`\n[createNode-ALL] 🎯 STORING in ${targetCol} collection:`);
+        console.log(`[createNode-ALL] Document ID: ${deviceDocId}`);
+        console.log(`[createNode-ALL] Full metadata keys:`, Object.keys(metadata));
+        console.log(`[createNode-ALL] thingspeak_channel_id VALUE:`, metadata.thingspeak_channel_id);
+        console.log(`[createNode-ALL] thingspeak_read_api_key VALUE:`, metadata.thingspeak_read_api_key);
+
+        // Write BOTH documents at once with matching IDs
+        // If batch.commit() fails, NEITHER document is written
         await batch.commit();
-        console.log(`[Device] ✅ Atomically created ${typeNormalized} device: ${idForDevice}`);
 
         // SaaS Invalidation: Flush all user-specific and aggregate dashboard caches
         try {
@@ -574,6 +619,29 @@ exports.createNode = async (req, res) => {
             console.warn('[Device] Cache clear failed:', cacheErr.message);
         }
 
+        // ✅ FIX #8: EMIT REAL-TIME SOCKET EVENT (CRITICAL)
+        // BEFORE: Only cache invalidated, frontend waited 12s for polling or refresh
+        // AFTER: Socket event pushes new device to all connected clients immediately
+        try {
+            if (global.io) {
+                const fullDevice = {
+                    id: deviceDocId,
+                    node_key: deviceDocId,
+                    ...registryData,
+                    ...metadata
+                };
+                
+                // Broadcast to all connected clients of this customer
+                global.io.to(`customer:${customerId}`).emit("device:added", {
+                    device: fullDevice,
+                    timestamp: new Date().toISOString()
+                });
+                console.log(`[Device] 📡 Emitted device:added to customer ${customerId}`);
+            }
+        } catch (socketErr) {
+            console.warn('[Device] Socket emission failed (non-fatal):', socketErr.message);
+        }
+
         return res.status(201).json({
             success: true,
             deviceId: deviceDocId,
@@ -584,7 +652,7 @@ exports.createNode = async (req, res) => {
         });
     } catch (error) {
         console.error('[Device] ❌ Create device failed:', error.message);
-        res.status(500).json({ error: "Failed to create device", details: error.message });
+        res.status(500).json({ error: "Failed to create device" });
     }
 };
 
@@ -683,19 +751,8 @@ exports.getNodes = async (req, res) => {
 /**
  * Helper to resolve device by document ID OR device_id
  */
-async function resolveDevice(id) {
-    if (!id) return null;
-    const directDoc = await db.collection("devices").doc(id).get();
-    if (directDoc.exists) return directDoc;
-
-    const q1 = await db.collection("devices").where("device_id", "==", id).limit(1).get();
-    if (!q1.empty) return q1.docs[0];
-
-    const q2 = await db.collection("devices").where("node_id", "==", id).limit(1).get();
-    if (!q2.empty) return q2.docs[0];
-
-    return null;
-}
+// ✅ AUDIT FIX L2: Use shared resolveDevice utility (was duplicated in 3 controllers)
+const resolveDevice = require("../utils/resolveDevice.js");
 
 exports.updateNode = async (req, res) => {
     try {
@@ -821,6 +878,20 @@ exports.updateNode = async (req, res) => {
             telemetryCache.del(`status_${deviceDoc.id}`);
         }
 
+        // ✅ FIX #13: EMIT SOCKET EVENT FOR DEVICE UPDATE
+        // Notify all users of this customer that a device was updated
+        // This triggers frontend to refresh device data without full query invalidation
+        const customerId = metaUpdate.customer_id || deviceDoc.data().customer_id || deviceDoc.data().customerId;
+        if (customerId && global.io) {
+            global.io.to(`customer:${customerId}`).emit("device:updated", {
+                deviceId: deviceDoc.id,
+                changes: metaUpdate,
+                success: true,
+                timestamp: new Date().toISOString()
+            });
+            console.log(`[AdminController] ✅ device:updated event emitted for device: ${deviceDoc.id}, customer: ${customerId}`);
+        }
+
         res.status(200).json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Failed to update metadata" });
@@ -861,6 +932,20 @@ exports.deleteNode = async (req, res) => {
             await cache.del("nodes:polling:list");
         } catch (err) {
             // ignore cache delete errors
+        }
+
+        // ✅ FIX #12: EMIT SOCKET EVENT FOR DEVICE DELETION
+        // Notify all users of this customer that a device was deleted
+        // This triggers frontend to remove device from state immediately
+        const deviceData = deviceDoc.data();
+        const customerId = deviceData.customer_id || deviceData.customerId;
+        if (customerId && global.io) {
+            global.io.to(`customer:${customerId}`).emit("device:deleted", {
+                deviceId,
+                success: true,
+                timestamp: new Date().toISOString()
+            });
+            console.log(`[AdminController] ✅ device:deleted event emitted for device: ${deviceId}, customer: ${customerId}`);
         }
 
         res.status(200).json({ success: true });
@@ -925,7 +1010,7 @@ exports.getDashboardSummary = async (req, res) => {
         res.status(200).json(result);
     } catch (error) {
         console.error("[Dashboard] Failed to get summary:", error.message);
-        res.status(500).json({ error: "Failed to get dashboard summary", details: error.message });
+        res.status(500).json({ error: "Failed to get dashboard summary" });
     }
 };
 
@@ -963,8 +1048,43 @@ exports.getHierarchy = async (req, res) => {
 
 exports.getAuditLogs = async (req, res) => {
     try {
-        res.status(200).json([]);
+        // ✅ AUDIT FIX L8: Real audit log query with tenant isolation + pagination
+        const isSuperAdmin = req.user.role === "superadmin";
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const cursor = req.query.cursor;
+
+        let query = db.collection("audit_logs")
+            .orderBy("timestamp", "desc")
+            .limit(limit);
+
+        // Tenant isolation: non-superadmins only see their own actions
+        if (!isSuperAdmin) {
+            query = query.where("user_id", "==", req.user.uid);
+        }
+
+        // Cursor-based pagination
+        if (cursor) {
+            const cursorDoc = await db.collection("audit_logs").doc(cursor).get();
+            if (cursorDoc.exists) {
+                query = query.startAfter(cursorDoc);
+            }
+        }
+
+        const snapshot = await query.get();
+        const logs = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        const nextCursor = logs.length === limit ? logs[logs.length - 1].id : null;
+
+        res.status(200).json({
+            logs,
+            count: logs.length,
+            nextCursor
+        });
     } catch (error) {
+        console.error("[AdminController] getAuditLogs error:", error.message);
         res.status(500).json({ error: "Failed to get audit logs" });
     }
 };
@@ -1019,7 +1139,7 @@ exports.getZoneStats = async (req, res) => {
         res.status(200).json(zoneStats);
     } catch (error) {
         console.error("[AdminController] getZoneStats error:", error);
-        res.status(500).json({ error: "Failed to get zone statistics", details: error.message });
+        res.status(500).json({ error: "Failed to get zone statistics" });
     }
 };
 
@@ -1109,6 +1229,17 @@ exports.updateDeviceVisibility = async (req, res) => {
             cache.flushPrefix(`user:${customerId}:`)  // ← flush this specific customer's node cache
         ]);
 
+        // ✅ FIX #14: EMIT SOCKET EVENT FOR VISIBILITY CHANGE
+        if (customerId && global.io) {
+            global.io.to(`customer:${customerId}`).emit("device:updated", {
+                deviceId: deviceDoc.id,
+                changes: { isVisibleToCustomer },
+                success: true,
+                timestamp: new Date().toISOString()
+            });
+            console.log(`[AdminController] ✅ device:updated event emitted for visibility change: ${deviceDoc.id}`);
+        }
+
         console.log(`[AdminController] Device ${id} visibility set to: ${isVisibleToCustomer}`);
         return res.status(200).json({ success: true, isVisibleToCustomer });
     } catch (error) {
@@ -1170,6 +1301,19 @@ exports.updateDeviceParameters = async (req, res) => {
             cache.flushPrefix("user:"),
             cache.flushPrefix("dashboard_init_")
         ]);
+
+        // ✅ FIX #15: EMIT SOCKET EVENT FOR PARAMETER CHANGES
+        const deviceData = deviceDoc.data();
+        const customerId = deviceData.customer_id || deviceData.customerId;
+        if (customerId && global.io) {
+            global.io.to(`customer:${customerId}`).emit("device:updated", {
+                deviceId: deviceDoc.id,
+                changes: { customer_config },
+                success: true,
+                timestamp: new Date().toISOString()
+            });
+            console.log(`[AdminController] ✅ device:updated event emitted for parameter changes: ${deviceDoc.id}`);
+        }
 
         console.log(`[AdminController] Device ${id} parameters updated:`, customer_config);
         return res.status(200).json({ success: true, customer_config });

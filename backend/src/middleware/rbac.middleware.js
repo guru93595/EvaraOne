@@ -1,4 +1,5 @@
 // ─── #5 FIX: RBAC middleware ──────────────────────────────────────────────────
+const logger = require("../utils/logger.js"); // ✅ AUDIT FIX M10
 // ORIGINAL BUG: When allowedRoles was empty ([]) and role was undefined/empty,
 // the middleware fell through to next() — granting access with no role at all.
 //
@@ -23,7 +24,7 @@ const rbac = (allowedRoles = []) => {
             : "";
 
         if (!userRole) {
-            console.warn(`[RBAC] Rejecting request — role not resolved for uid=${req.user.uid}`);
+            logger.warn(`RBAC rejection — role not resolved`, { uid: req.user.uid });
             return res.status(401).json({
                 error: "Authentication failed: User role could not be determined — please sign in again",
             });
@@ -60,7 +61,5 @@ const rbac = (allowedRoles = []) => {
         next();
     };
 };
-
-module.exports = rbac;
 
 module.exports = rbac;

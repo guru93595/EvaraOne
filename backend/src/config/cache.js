@@ -133,8 +133,15 @@ class CacheProvider {
     async flushPrefix(prefix) {
         if (this.isRedisReady) {
             try {
-                const keys = await this.redis.keys(`${prefix}*`);
-                if (keys.length > 0) await this.redis.del(...keys);
+                // ✅ AUDIT FIX C4: Use SCAN instead of KEYS to avoid O(N) blocking
+                // KEYS * blocks the Redis event loop for ALL clients at scale.
+                // SCAN uses cursor-based iteration in batches, non-blocking.
+                let cursor = '0';
+                do {
+                    const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 100);
+                    cursor = nextCursor;
+                    if (keys.length > 0) await this.redis.del(...keys);
+                } while (cursor !== '0');
                 return;
             } catch (e) { /* fallback */ }
         }

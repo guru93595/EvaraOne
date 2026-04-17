@@ -101,6 +101,27 @@ const EvaraDeepAnalytics = () => {
     const isConfigMissing = analyticsError === "Telemetry configuration missing";
     const isOffline = onlineStatus === 'Offline';
 
+    // Derived Offline Logic with duration message
+    const { durLabel: deepDurationLabel } = useMemo(() => {
+        if (!bestTimestamp) return { durLabel: '' };
+
+        const lastSeenDate = new Date(bestTimestamp);
+        const now = new Date();
+        const diffMs = now.getTime() - lastSeenDate.getTime();
+        const diffMin = diffMs / 60000;
+        const offline = diffMin > 30;
+
+        // Duration Formatting
+        const hoursAgo = Math.floor(diffMin / 60);
+        const durationLabel = offline ? (
+            hoursAgo > 0
+                ? `Device offline · Last seen ${hoursAgo} hours ago`
+                : `Device offline · Last seen ${Math.floor(diffMin)} minutes ago`
+        ) : '';
+
+        return { durLabel: durationLabel };
+    }, [bestTimestamp]);
+
     // ── Stale age ─────────────────────────────────────────────────────────────
     const { label: staleLabel } = useStaleDataAge(telemetryData?.timestamp ?? null);
 
@@ -247,9 +268,21 @@ const EvaraDeepAnalytics = () => {
                                 </div>
                             </div>
                         </div>
-                        <h1 className="text-3xl font-black m-0" style={{ color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
-                            {deviceName} Deep Analytics
-                        </h1>
+                        <div className="flex flex-col gap-1">
+                            <h1 className="text-3xl font-black m-0" style={{ color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+                                {deviceName} Deep Analytics
+                            </h1>
+                            {isOffline && deepDurationLabel && (
+                                <p className="text-xs font-bold text-red-500 m-0">
+                                    {deepDurationLabel}
+                                </p>
+                            )}
+                            {zoneName && (
+                                <p className="text-xs text-slate-400 m-0">
+                                    {zoneName}
+                                </p>
+                            )}
+                        </div>
                     </div>
 
                     {isConfigMissing && (

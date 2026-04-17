@@ -1,5 +1,6 @@
 const { admin, db } = require("../config/firebase.js");
 const cache = require("../config/cache.js");
+const logger = require("../utils/logger.js"); // ✅ AUDIT FIX M10
 const Sentry = require("@sentry/node");
 
 const AUTH_CACHE_TTL = 180; // 3 minutes
@@ -49,11 +50,11 @@ const requireAuth = async (req, res, next) => {
                             }
                         }
 
-                        // Default: Generic customer role
-                        return { role: "customer" };
+                        // No matching user found — return null to signal rejection
+                        return null;
                     } catch (e) {
-                        console.error("Auth lookup failed:", e);
-                        return { role: "customer" };
+                        logger.error("Auth lookup failed", e, { category: 'auth' });
+                        return null; // Signal auth failure — do NOT default to customer
                     }
                 })();
 
@@ -61,13 +62,18 @@ const requireAuth = async (req, res, next) => {
                 // Cache the result for 10 minutes
                 await cache.set(cacheKey, userData, AUTH_CACHE_TTL);
             } catch (dbError) {
-                console.error("[Auth Middleware] Firestore lookup failed:", dbError.message);
-                userData = { role: "customer" };
+                logger.error("Firestore lookup failed", null, { category: 'auth', detail: dbError.message });
+                return res.status(503).json({ error: "Authentication service temporarily unavailable. Please try again." });
             }
+        }
+
+        // If Firestore returned null (no user found, or lookup failed), reject
+        if (!userData || !userData.role) {
+            return res.status(403).json({ error: "Access denied: user account not found in system" });
         }
         
         const role = (userData.role || "customer").trim().toLowerCase().replace(/\s+/g, "");
-        console.log(`[Auth] Resolved user ${decodedToken.uid} => role: '${role}'`);
+        logger.auth('resolved', decodedToken.uid, { role });
         
         req.user = {
             ...decodedToken,
@@ -80,12 +86,7 @@ const requireAuth = async (req, res, next) => {
         next();
     } catch (error) {
         // ✅ FIX #3: Log full error server-side, send generic message to client
-        console.error("[Auth Middleware] Token verification failed:", {
-            timestamp: new Date().toISOString(),
-            errorMessage: error.message,
-            errorCode: error.code,
-            stack: error.stack
-        });
+        logger.error("Token verification failed", error, { category: 'auth' });
 
         // Send generic message (no details exposed)
         Sentry.captureException(error);
@@ -165,7 +166,7 @@ async function checkOwnership(uid, deviceId, role = "customer", communityId = ""
 
         return false;
     } catch (err) {
-        console.error("[Auth] Ownership check failed:", err.message);
+        logger.error("Ownership check failed", err, { category: 'auth' });
         return false;
     }
 }

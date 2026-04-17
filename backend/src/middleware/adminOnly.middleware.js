@@ -12,6 +12,8 @@
  * - Log audit trail of failed attempts
  */
 
+const logger = require("../utils/logger.js"); // ✅ AUDIT FIX M10
+
 const adminOnly = (req, res, next) => {
   // Extract role from authenticated user
   const userRole = req.user?.role || '';
@@ -20,7 +22,7 @@ const adminOnly = (req, res, next) => {
   // Guard: MUST be superadmin
   if (userRole !== 'superadmin') {
     // Log attempt for security monitoring
-    console.warn(`[RBAC] ❌ Unauthorized admin access attempt`, {
+    logger.warn(`Unauthorized admin access attempt`, {
       timestamp: new Date().toISOString(),
       userId,
       userRole,
@@ -37,7 +39,7 @@ const adminOnly = (req, res, next) => {
   }
 
   // ✅ Authorized: Log for audit trail
-  console.log(`[RBAC] ✅ Admin action authorized`, {
+  logger.info(`Admin action authorized`, {
     timestamp: new Date().toISOString(),
     userId,
     method: req.method,

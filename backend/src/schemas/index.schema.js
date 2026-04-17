@@ -16,15 +16,31 @@ exports.createNodeSchema = z.object({
   body: z.object({
     id: z.string().optional(),
     displayName: z.string().min(1),
+    deviceName: z.string().optional(),
     assetType: z.string().min(1),
     assetSubType: z.string().optional(),
     zoneId: z.string().optional(),
     customerId: z.string().optional(),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
-    channelId: z.string().optional(),
-    readApiKey: z.string().optional(),
-    capacity: z.number().optional(),
+    latitude: z.union([z.number(), z.string()]).optional(),
+    longitude: z.union([z.number(), z.string()]).optional(),
+    // ThingSpeak credentials — MUST match frontend field names
+    thingspeakChannelId: z.string().optional(),
+    thingspeakReadKey: z.string().optional(),
+    // Field mappings
+    waterLevelField: z.string().optional(),
+    borewellDepthField: z.string().optional(),
+    meterReadingField: z.string().optional(),
+    flowRateField: z.string().optional(),
+    // Physical dimensions
+    capacity: z.union([z.number(), z.string()]).optional(),
+    depth: z.union([z.number(), z.string()]).optional(),
+    tankLength: z.union([z.number(), z.string()]).optional(),
+    tankBreadth: z.union([z.number(), z.string()]).optional(),
+    staticDepth: z.union([z.number(), z.string()]).optional(),
+    dynamicDepth: z.union([z.number(), z.string()]).optional(),
+    rechargeThreshold: z.union([z.number(), z.string()]).optional(),
+    // Location
+    hardwareId: z.string().optional(),
     status: z.string().optional()
   })
 });

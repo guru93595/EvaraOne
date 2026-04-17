@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const { sanitizeRequest, sanitizeError } = require('../utils/requestSanitizer');
 
 // ─── #8 FIX: Never expose stack traces or internal details in production ──────
 const isDev = () => process.env.NODE_ENV !== 'production';
@@ -39,14 +40,15 @@ const createErrorResponse = (error, statusCode = 500) => {
 
 // Main error handling middleware
 const errorHandler = (err, req, res, next) => {
+  // ✅ CRITICAL FIX #5: Sanitize request before logging
+  const sanitizedReq = sanitizeRequest(req);
+  const sanitizedErr = sanitizeError(err);
+
   // ── Internal logging — always log everything in dev, minimal in prod ──
   if (isDev()) {
     logger.error('Request error', err, {
-      method: req.method,
-      url: req.url,
-      headers: req.headers,
-      body: req.body,
-      user: req.user?.uid,
+      ...sanitizedReq,
+      error: sanitizedErr,
       stack: err.stack
     });
   } else {
@@ -54,7 +56,8 @@ const errorHandler = (err, req, res, next) => {
     logger.error('Request error', err, {
       method: req.method,
       url: req.url,
-      user: req.user?.uid
+      userId: req.user?.uid ? req.user.uid.substring(0, 4) + '***' : 'anonymous',
+      error: sanitizedErr
     });
   }
 

@@ -538,6 +538,17 @@ const EvaraFlowAnalytics = () => {
     const deviceConfig = ('config' in (unifiedData?.config ?? {})
         ? (unifiedData!.config as any).config
         : undefined) as FlowConfig | undefined;
+    
+    // 🔍 DEBUG: Log what we're getting
+    useEffect(() => {
+        console.log(`\n[EvaraFlowAnalytics] 📊 Data Status for ${hardwareId}:`);
+        console.log(`[EvaraFlowAnalytics]   unifiedData exists:`, !!unifiedData);
+        console.log(`[EvaraFlowAnalytics]   unifiedData.config:`, unifiedData?.config);
+        console.log(`[EvaraFlowAnalytics]   deviceConfig:`, deviceConfig);
+        console.log(`[EvaraFlowAnalytics]   Channel ID:`, deviceConfig?.thingspeak_channel_id);
+        console.log(`[EvaraFlowAnalytics]   API Key present:`, !!deviceConfig?.thingspeak_read_api_key);
+    }, [deviceConfig, hardwareId, unifiedData]);
+    
     const telemetryData = (unifiedData?.latest && !('error' in unifiedData.latest)
         ? unifiedData.latest
         : undefined) as TelemetryPayload | undefined;
@@ -1015,6 +1026,25 @@ const EvaraFlowAnalytics = () => {
                                     </button>
                                 </div>
 
+                                <p className="text-[12px] font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>ThingSpeak Configuration (Read-Only)</p>
+                                
+                                <div className="grid grid-cols-1 gap-3 mb-5">
+                                    <div className="rounded-xl p-4" style={{ background: 'var(--bg-primary)', border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Channel ID</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
+                                            {deviceConfig?.thingspeak_channel_id || '—'}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-xl p-4" style={{ background: 'var(--bg-primary)', border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Read API Key</p>
+                                        <p className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
+                                            {deviceConfig?.thingspeak_read_api_key ? '••••••••••••••••' : '—'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <p className="text-[12px] font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>Field Mapping</p>
+                                
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
                                     <div className="rounded-xl p-4" style={{ background: 'var(--bg-primary)', border: '1px solid var(--card-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
                                         <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Flow Rate Field</p>
